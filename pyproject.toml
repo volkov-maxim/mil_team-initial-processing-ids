@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mil-team-initial-processing-ids"
+version = "0.1.0"
+description = "Initial processing service for personal identification documents."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0,<1.0.0",
+    "opencv-python>=4.10.0,<5.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.0,<10.0.0",
+    "pytest-pspec>=0.0.4,<1.0.0",
+]
+ocr = [
+    "easyocr>=1.7.1,<2.0.0",
+    "torch>=2.3.0,<3.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["app*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+addopts = "--import-mode=importlib --pspec"
+testpaths = ["tests"]
+pythonpath = ["src"]
