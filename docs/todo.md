@@ -21,18 +21,18 @@ isolated, verifiable tasks.
 
 ## Phase 0 — Foundation & Scaffolding
 
-- [ ] **T001** Initialize Python service skeleton and package layout.
+- [x] **T001** Initialize Python service skeleton and package layout.
   - Depends on: None
   - Implement: Create `src/app/*` and `tests/*` folders from the approved
     structure.
   - Verify: `pytest --collect-only` runs without import/path errors.
 
-- [ ] **T002** Add dependency/project management and basic tooling config.
+- [x] **T002** Add dependency/project management and basic tooling config.
   - Depends on: T001
   - Implement: Add project/dependency files and test runner configuration.
   - Verify: Environment installs; `pytest --collect-only` succeeds.
 
-- [ ] **T003** Implement environment config model.
+- [x] **T003** Implement environment config model.
   - Depends on: T002
   - Implement: Add `src/app/core/config.py` with typed settings for device,
     fallback, artifact paths, and thresholds.
