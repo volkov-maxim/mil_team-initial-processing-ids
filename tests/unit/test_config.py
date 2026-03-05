@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.app.core.config import AppSettings
+from app.core.config import AppSettings
 
 
 def test_app_settings_defaults() -> None:
