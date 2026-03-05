@@ -295,3 +295,9 @@ compose.yaml
 - [ ] Partial extraction returns explicit nulls with confidence/validation metadata.
 - [ ] CPU and GPU modes are supported; GPU path remains within budget target.
 - [ ] Docker Compose run is documented and reproducible.
+
+## 9) The tech stack
+- For tests: pytest + pytest-pspec
+- For API: fastapi
+- For image aligment: opencv-python
+- For OCR: easyocr + torch
