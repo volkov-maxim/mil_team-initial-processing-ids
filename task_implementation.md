@@ -1,0 +1,3 @@
+- Use docs from `docs` folder for context;
+- Use execution rules, task format, the tech stack from docs as guardrails;
+- Implement the task T<XYZ>.

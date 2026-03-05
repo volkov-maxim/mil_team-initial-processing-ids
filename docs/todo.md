@@ -38,7 +38,7 @@ isolated, verifiable tasks.
     fallback, artifact paths, and thresholds.
   - Verify: Unit tests for default values and env overrides pass.
 
-- [ ] **T004** Add structured logging bootstrap.
+- [x] **T004** Add structured logging bootstrap.
   - Depends on: T003
   - Implement: Add `src/app/core/logging.py` and configure application logger.
   - Verify: Unit test confirms expected structured fields are emitted.
