@@ -63,11 +63,10 @@ isolated, verifiable tasks.
 
 ## Phase 1 — API Contract & Error Model
 
-- [ ] **T008** Add request ID generation and propagation.
+- [x] **T008** Add request ID generation and propagation.
   - Depends on: T007
   - Implement: Add middleware that injects `request_id` to context/response.
-  - Verify: Integration test confirms request ID exists and is stable per
-    request.
+  - Verify: Integration test confirms request ID exists and is stable per request.
 
 - [ ] **T009** Implement request schema contract.
   - Depends on: T007
