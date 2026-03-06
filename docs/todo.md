@@ -10,6 +10,7 @@ isolated, verifiable tasks.
 - Complete tasks in ID order unless dependency notes allow parallel work.
 - Every task is done only when its `Verify` condition passes.
 - Keep each PR/task scoped to one item when possible.
+- Use the workspace-configured Python environment.
 
 ## Task Format
 
@@ -53,7 +54,7 @@ isolated, verifiable tasks.
   - Implement: Add `Dockerfile`, `compose.yaml`, and `.env.example`.
   - Verify: `docker compose config` validates successfully.
 
-- [ ] **T007** Add app bootstrap and health route.
+- [x] **T007** Add app bootstrap and health route.
   - Depends on: T004, T005
   - Implement: Wire app entrypoint in `src/app/main.py` and health endpoint.
   - Verify: Integration test for health endpoint returns 200.
