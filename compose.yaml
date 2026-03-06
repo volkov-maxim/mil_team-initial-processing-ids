@@ -1,0 +1,29 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mil-team-initial-processing-ids:local
+    container_name: mil-team-initial-processing-ids-api
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_DEVICE_MODE: ${APP_DEVICE_MODE:-auto}
+      APP_USE_EXTERNAL_FALLBACK_DEFAULT: ${APP_USE_EXTERNAL_FALLBACK_DEFAULT:-false}
+      APP_FALLBACK_BASE_URL: ${APP_FALLBACK_BASE_URL:-}
+      APP_FALLBACK_PROXY_URL: ${APP_FALLBACK_PROXY_URL:-}
+      APP_ARTIFACTS_ROOT: ${APP_ARTIFACTS_ROOT:-artifacts}
+      APP_ALIGNED_SUBDIR: ${APP_ALIGNED_SUBDIR:-aligned}
+      APP_OVERLAY_SUBDIR: ${APP_OVERLAY_SUBDIR:-overlays}
+      APP_FALLBACK_CONFIDENCE_THRESHOLD: ${APP_FALLBACK_CONFIDENCE_THRESHOLD:-0.70}
+      APP_REQUIRED_FIELD_CONFIDENCE_THRESHOLD: ${APP_REQUIRED_FIELD_CONFIDENCE_THRESHOLD:-0.80}
+    volumes:
+      - ./artifacts:/app/artifacts
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped

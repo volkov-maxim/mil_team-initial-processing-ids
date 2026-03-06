@@ -48,7 +48,7 @@ isolated, verifiable tasks.
   - Implement: Add typed exceptions in `src/app/core/exceptions.py`.
   - Verify: Unit tests confirm exception categories and payload fields.
 
-- [ ] **T006** Add container runtime baseline.
+- [x] **T006** Add container runtime baseline.
   - Depends on: T002
   - Implement: Add `Dockerfile`, `compose.yaml`, and `.env.example`.
   - Verify: `docker compose config` validates successfully.
