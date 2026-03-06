@@ -43,7 +43,7 @@ isolated, verifiable tasks.
   - Implement: Add `src/app/core/logging.py` and configure application logger.
   - Verify: Unit test confirms expected structured fields are emitted.
 
-- [ ] **T005** Add core exception primitives.
+- [x] **T005** Add core exception primitives.
   - Depends on: T003
   - Implement: Add typed exceptions in `src/app/core/exceptions.py`.
   - Verify: Unit tests confirm exception categories and payload fields.
