@@ -105,7 +105,7 @@ isolated, verifiable tasks.
     `src/app/pipeline/processing.py` with stage stubs in strict order.
   - Verify: Unit test asserts stage order and short-circuit semantics.
 
-- [ ] **T015** Implement `POST /v1/process-document` placeholder route.
+- [x] **T015** Implement `POST /v1/process-document` placeholder route.
   - Depends on: T008, T009, T010, T012, T014
   - Implement: Add endpoint handler in `src/app/api/routes.py` returning
     contract-valid placeholder payload.

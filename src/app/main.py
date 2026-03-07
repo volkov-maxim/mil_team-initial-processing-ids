@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
+from app.api.routes import router as api_router
 from app.api.errors import ApiErrorResponse
 from app.api.errors import BadRequestErrorResponse
 from app.api.errors import InternalServerErrorResponse
@@ -19,6 +20,7 @@ settings = load_settings()
 logger = get_configured_app_logger()
 
 app = FastAPI(title="mil_team-initial-processing-ids")
+app.include_router(api_router)
 
 REQUEST_ID_HEADER = "X-Request-ID"
 INTERNAL_SERVER_STATUS = 500
