@@ -127,7 +127,7 @@ isolated, verifiable tasks.
     `DocumentPreprocessor.validate_type_size_readability`.
   - Verify: Unit tests cover allowed and blocked content types/sizes.
 
-- [ ] **T018** Implement readability checks.
+- [x] **T018** Implement readability checks.
   - Depends on: T016
   - Implement: Add readability heuristics for blank/corrupt/non-document-like
     inputs.
