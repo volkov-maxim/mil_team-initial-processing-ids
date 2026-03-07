@@ -99,7 +99,7 @@ isolated, verifiable tasks.
   - Verify: Unit tests validate required fields, diagnostics, and timing
     containers.
 
-- [ ] **T014** Implement pipeline orchestrator skeleton.
+- [x] **T014** Implement pipeline orchestrator skeleton.
   - Depends on: T013
   - Implement: Add `process_document_pipeline` in
     `src/app/pipeline/processing.py` with stage stubs in strict order.
