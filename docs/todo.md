@@ -68,7 +68,7 @@ isolated, verifiable tasks.
   - Implement: Add middleware that injects `request_id` to context/response.
   - Verify: Integration test confirms request ID exists and is stable per request.
 
-- [ ] **T009** Implement request schema contract.
+- [x] **T009** Implement request schema contract.
   - Depends on: T007
   - Implement: Add multipart contract schema in `src/app/api/schemas.py` for
     `image`, `document_type_hint`, `use_external_fallback`.
