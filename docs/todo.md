@@ -121,7 +121,7 @@ isolated, verifiable tasks.
     decoding.
   - Verify: Unit tests for valid decode and decode failure paths.
 
-- [ ] **T017** Implement type and size validation.
+- [x] **T017** Implement type and size validation.
   - Depends on: T016
   - Implement: Add media type and file-size checks in
     `DocumentPreprocessor.validate_type_size_readability`.
