@@ -74,7 +74,7 @@ isolated, verifiable tasks.
     `image`, `document_type_hint`, `use_external_fallback`.
   - Verify: Unit tests for accepted/rejected request payloads pass.
 
-- [ ] **T010** Implement success response schema.
+- [x] **T010** Implement success response schema.
   - Depends on: T009
   - Implement: Add `ProcessDocumentResponse` fields including nullable
     extraction fields.

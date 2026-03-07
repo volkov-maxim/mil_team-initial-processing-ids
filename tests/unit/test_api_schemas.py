@@ -7,7 +7,9 @@ from fastapi import UploadFile
 from pydantic import ValidationError
 
 from app.api.schemas import DocumentTypeHint
+from app.api.schemas import ExtractedFields
 from app.api.schemas import ProcessDocumentRequest
+from app.api.schemas import ProcessDocumentResponse
 
 
 def _build_upload_file() -> UploadFile:
@@ -67,3 +69,76 @@ def test_process_document_request_rejects_missing_image() -> None:
         ProcessDocumentRequest.model_validate(
             {"document_type_hint": "bank_card"}
         )
+
+
+def test_process_document_response_includes_required_contract_keys() -> None:
+    """Serialize a payload with all required top-level response keys."""
+    response_payload = ProcessDocumentResponse(
+        request_id="req-001",
+        document_type_detected="id_card",
+        aligned_image="artifacts/req-001/aligned.png",
+        detections=[],
+        field_confidence={"full_name": 0.95},
+        validation_flags=["name_verified"],
+        processing_metadata={"device": "cpu", "fallback_used": False},
+    )
+
+    serialized = response_payload.model_dump()
+
+    assert "request_id" in serialized
+    assert "document_type_detected" in serialized
+    assert "aligned_image" in serialized
+    assert "detections" in serialized
+    assert "fields" in serialized
+    assert "field_confidence" in serialized
+    assert "validation_flags" in serialized
+    assert "processing_metadata" in serialized
+
+
+def test_process_document_response_keeps_nullable_fields_explicit() -> None:
+    """Keep missing extraction values as explicit null entries."""
+    response_payload = ProcessDocumentResponse(
+        request_id="req-002",
+        document_type_detected="drivers_license",
+        aligned_image="artifacts/req-002/aligned.png",
+        detections=[],
+        fields=ExtractedFields(
+            full_name="Alex Doe",
+            date_of_birth=None,
+            license_number=None,
+        ),
+        field_confidence={},
+        validation_flags=[],
+        processing_metadata={"device": "cpu", "fallback_used": False},
+    )
+
+    serialized = response_payload.model_dump()
+
+    assert serialized["fields"]["full_name"] == "Alex Doe"
+    assert serialized["fields"]["date_of_birth"] is None
+    assert serialized["fields"]["license_number"] is None
+
+
+def test_extracted_fields_match_document_schema_contract() -> None:
+    """Keep response field keys aligned with Chapter 8 schema contract."""
+    expected_field_names = {
+        "card_number",
+        "cardholder_name",
+        "expiry_date",
+        "issuer_network",
+        "bank_name",
+        "full_name",
+        "date_of_birth",
+        "sex",
+        "place_of_birth",
+        "document_number",
+        "issuing_authority",
+        "issue_date",
+        "license_number",
+        "place_of_residence",
+        "license_class",
+    }
+
+    actual_field_names = set(ExtractedFields.model_fields.keys())
+
+    assert actual_field_names == expected_field_names

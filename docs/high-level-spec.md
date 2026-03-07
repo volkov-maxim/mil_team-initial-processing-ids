@@ -115,36 +115,34 @@ Required fields:
 - `expiry_date`
 
 Optional fields:
-- `issuer_network` (Visa/Mastercard/etc.)
+- `issuer_network` (Visa/Mastercard/МИР/etc.)
 - `bank_name`
-- `country_code`
 
 ### 8.2 ID Card Schema
 Required fields:
 - `full_name`
 - `date_of_birth`
+- `sex`
+- `place_of_birth`
 - `document_number`
-- `expiry_date` (if present on document class)
 
 Optional fields:
-- `sex`
-- `nationality`
 - `issuing_authority`
 - `issue_date`
-- `address`
+- `expiry_date` (if present on document class)
 
 ### 8.3 Driver’s License Schema
 Required fields:
 - `full_name`
 - `date_of_birth`
-- `license_number`
-- `expiry_date`
-
-Optional fields:
+- `place_of_birth`
 - `issue_date`
+- `expiry_date`
 - `issuing_authority`
+- `license_number`
+- `place_of_residence`
 - `license_class`
-- `address`
+
 
 ### Normalization rules (all schemas)
 - Dates normalized to ISO-like format where possible (`YYYY-MM-DD`), otherwise returned with raw value + parse status.
