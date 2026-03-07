@@ -115,7 +115,7 @@ isolated, verifiable tasks.
 
 ## Phase 2 — Input Validation & Alignment
 
-- [ ] **T016** Implement image load/decode helpers.
+- [x] **T016** Implement image load/decode helpers.
   - Depends on: T014
   - Implement: Add `src/app/preprocessing/image_io.py` for safe byte-to-image
     decoding.
