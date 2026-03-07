@@ -86,7 +86,7 @@ isolated, verifiable tasks.
   - Verify: Unit tests confirm error envelopes include `error_code` and
     `message`.
 
-- [ ] **T012** Register global exception handlers.
+- [x] **T012** Register global exception handlers.
   - Depends on: T011, T007
   - Implement: Map core exceptions to typed API error responses.
   - Verify: Integration tests confirm status code mapping for representative
