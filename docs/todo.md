@@ -92,7 +92,7 @@ isolated, verifiable tasks.
   - Verify: Integration tests confirm status code mapping for representative
     errors.
 
-- [ ] **T013** Implement pipeline context and result models.
+- [x] **T013** Implement pipeline context and result models.
   - Depends on: T010
   - Implement: Add `PipelineContext` and `PipelineResult` in
     `src/app/pipeline/context.py` and `src/app/pipeline/result.py`.
