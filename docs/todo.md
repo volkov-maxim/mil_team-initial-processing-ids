@@ -80,7 +80,7 @@ isolated, verifiable tasks.
     extraction fields.
   - Verify: Serialization tests validate required keys and nullable behavior.
 
-- [ ] **T011** Implement typed error response models.
+- [x] **T011** Implement typed error response models.
   - Depends on: T005
   - Implement: Add API error models for 400/422/500 in `src/app/api/errors.py`.
   - Verify: Unit tests confirm error envelopes include `error_code` and
