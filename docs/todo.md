@@ -169,7 +169,7 @@ isolated, verifiable tasks.
 
 ## Phase 3 — OCR Detection & Recognition
 
-- [ ] **T025** Define OCR domain models and detector interface.
+- [x] **T025** Define OCR domain models and detector interface.
   - Depends on: T024
   - Implement: Add `TextRegion` model and `TextDetector` contract.
   - Verify: Unit tests for model validation and detector return typing.
