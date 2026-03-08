@@ -180,7 +180,7 @@ isolated, verifiable tasks.
     `src/app/ocr/detector.py`.
   - Verify: Fixture smoke test returns text regions with confidence.
 
-- [ ] **T027** Define recognizer models and interface.
+- [x] **T027** Define recognizer models and interface.
   - Depends on: T025
   - Implement: Add `RecognizedToken`, `RecognizedLine`, recognizer contract.
   - Verify: Unit tests validate token/line model constraints.
