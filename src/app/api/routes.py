@@ -45,6 +45,7 @@ async def process_document(
         image_bytes=image_bytes,
         document_type_hint=payload.document_type_hint,
         use_external_fallback=payload.use_external_fallback,
+        metadata={"content_type": payload.image.content_type},
     )
     pipeline_result = process_document_pipeline(context)
 

@@ -7,10 +7,22 @@ from time import perf_counter
 
 from app.api.schemas import DocumentTypeDetected
 from app.api.schemas import ExtractedFields
+from app.core.exceptions import InputValidationError
+from app.core.exceptions import UnprocessableDocumentError
 from app.pipeline.context import PipelineContext
 from app.pipeline.result import PipelineResult
+from app.preprocessing.document_preprocessor import DocumentPreprocessor
+from app.preprocessing.image_io import decode_image_bytes
 
 StageHandler = Callable[[PipelineContext], bool]
+
+INPUT_VALIDATION_FAILURE_REASONS = frozenset(
+    {
+        "missing_content_type",
+        "unsupported_media_type",
+        "file_too_large",
+    }
+)
 
 STAGE_SEQUENCE: tuple[str, ...] = (
     "validate_input",
@@ -25,11 +37,60 @@ STAGE_SEQUENCE: tuple[str, ...] = (
 
 def _validate_input(context: PipelineContext) -> bool:
     """Validate request input payload shape and readability constraints."""
-    return True
+    preprocessor = _resolve_preprocessor(context)
+    metadata_content_type = context.metadata.get("content_type")
+    content_type: str | None
+    if isinstance(metadata_content_type, str):
+        content_type = metadata_content_type
+    else:
+        content_type = None
+
+    outcome = preprocessor.validate_type_size_readability(
+        context.image_bytes,
+        content_type=content_type,
+    )
+    if outcome.is_valid:
+        return True
+
+    details = dict(outcome.details)
+    if outcome.failure_reason is not None:
+        details["failure_reason"] = outcome.failure_reason
+
+    if outcome.failure_reason in INPUT_VALIDATION_FAILURE_REASONS:
+        raise InputValidationError(
+            message=outcome.message,
+            details=details,
+        )
+
+    raise UnprocessableDocumentError(
+        message=outcome.message,
+        details=details,
+    )
 
 
 def _align_image(context: PipelineContext) -> bool:
     """Align document geometry before OCR and extraction stages."""
+    preprocessor = _resolve_preprocessor(context)
+    source_image = decode_image_bytes(context.image_bytes)
+    aligned_image_array = preprocessor.align_image(source_image)
+
+    context.stage_outputs["aligned_image_array"] = aligned_image_array
+
+    artifact_path = f"artifacts/{context.request_id}/aligned-image.png"
+    context.artifacts["aligned_image"] = artifact_path
+
+    height, width = aligned_image_array.shape[:2]
+    channels = 1
+    if aligned_image_array.ndim == 3:
+        channels = int(aligned_image_array.shape[2])
+
+    context.metadata["aligned_artifact"] = {
+        "path": artifact_path,
+        "height": int(height),
+        "width": int(width),
+        "channels": channels,
+    }
+
     return True
 
 
@@ -79,6 +140,17 @@ def _resolve_stage_handlers(
     return handlers
 
 
+def _resolve_preprocessor(context: PipelineContext) -> DocumentPreprocessor:
+    """Resolve a request-scoped preprocessor instance."""
+    cached = context.stage_outputs.get("preprocessor")
+    if isinstance(cached, DocumentPreprocessor):
+        return cached
+
+    preprocessor = DocumentPreprocessor()
+    context.stage_outputs["preprocessor"] = preprocessor
+    return preprocessor
+
+
 def _build_result(
     context: PipelineContext,
     *,
@@ -89,17 +161,14 @@ def _build_result(
     context.metadata["executed_stages"] = executed_stages
     context.metadata["short_circuited"] = short_circuit_stage is not None
     context.metadata["short_circuit_stage"] = short_circuit_stage
+    processing_metadata = dict(context.metadata)
 
     return PipelineResult(
         request_id=context.request_id,
         document_type_detected=DocumentTypeDetected.UNKNOWN,
         aligned_image=context.artifacts.get("aligned_image"),
         fields=ExtractedFields(),
-        processing_metadata={
-            "executed_stages": executed_stages,
-            "short_circuited": short_circuit_stage is not None,
-            "short_circuit_stage": short_circuit_stage,
-        },
+        processing_metadata=processing_metadata,
         diagnostics=context.diagnostics,
         timings=context.timings,
     )

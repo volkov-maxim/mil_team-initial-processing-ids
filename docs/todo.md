@@ -159,7 +159,7 @@ isolated, verifiable tasks.
   - Implement: Return structured alignment failure diagnostics.
   - Verify: Unit tests validate diagnostic payload for known failure cases.
 
-- [ ] **T024** Wire preprocessing stage into pipeline.
+- [x] **T024** Wire preprocessing stage into pipeline.
   - Depends on: T017, T018, T022, T023
   - Implement: Replace preprocess stub in pipeline orchestrator.
   - Verify: Integration test confirms aligned artifact data exists in pipeline
