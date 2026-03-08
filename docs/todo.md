@@ -174,7 +174,7 @@ isolated, verifiable tasks.
   - Implement: Add `TextRegion` model and `TextDetector` contract.
   - Verify: Unit tests for model validation and detector return typing.
 
-- [ ] **T026** Implement detector adapter.
+- [x] **T026** Implement detector adapter.
   - Depends on: T025
   - Implement: Add local OCR detector integration in
     `src/app/ocr/detector.py`.
