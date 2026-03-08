@@ -144,9 +144,9 @@ isolated, verifiable tasks.
   - Implement: Apply geometric transform to create canonical aligned image.
   - Verify: Fixture tests confirm corrected output dimensions/orientation.
 
-- [ ] **T021** Implement rotation normalization.
+- [x] **T021** Implement rotation normalization.
   - Depends on: T020
-  - Implement: Normalize orientation after perspective correction.
+  - Implement: Normalize orientation after perspective correction. The angle of rotation of document on image can be arbitrary.
   - Verify: Tests with rotated fixtures yield upright alignment.
 
 - [ ] **T022** Implement denoise and contrast normalization.

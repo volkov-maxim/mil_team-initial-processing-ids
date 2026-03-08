@@ -32,6 +32,8 @@ DEFAULT_BOUNDARY_APPROXIMATION_RATIO = 0.02
 DEFAULT_BOUNDARY_CANNY_THRESHOLD_LOW = 60
 DEFAULT_BOUNDARY_CANNY_THRESHOLD_HIGH = 180
 DEFAULT_PERSPECTIVE_INTERPOLATION = cv2.INTER_LINEAR
+DEFAULT_ROTATION_TOP_BAND_FRACTION = 0.30
+DEFAULT_ROTATION_LANDSCAPE_BONUS = 0.25
 
 
 class ValidationOutcome(BaseModel):
@@ -100,6 +102,81 @@ def _compute_perspective_target_size(
     return target_width, target_height
 
 
+def _as_grayscale(image: np.ndarray) -> np.ndarray:
+    """Convert image to grayscale while preserving grayscale inputs."""
+    if image.ndim == 2:
+        return image
+
+    return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+
+def _rotate_bound(image: np.ndarray, angle_deg: float) -> np.ndarray:
+    """Rotate image by arbitrary angle while preserving complete content."""
+    height, width = image.shape[:2]
+    center = (width / 2.0, height / 2.0)
+    transform = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
+
+    abs_cos = abs(transform[0, 0])
+    abs_sin = abs(transform[0, 1])
+    bound_width = int(round((height * abs_sin) + (width * abs_cos)))
+    bound_height = int(round((height * abs_cos) + (width * abs_sin)))
+
+    transform[0, 2] += (bound_width / 2.0) - center[0]
+    transform[1, 2] += (bound_height / 2.0) - center[1]
+
+    border_value: int | tuple[int, int, int]
+    if image.ndim == 2:
+        border_value = 255
+    else:
+        border_value = (255, 255, 255)
+
+    return cv2.warpAffine(
+        image,
+        transform,
+        (bound_width, bound_height),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=border_value,
+    )
+
+
+def _estimate_skew_angle(image: np.ndarray) -> float:
+    """Estimate arbitrary skew angle in degrees for deskew rotation."""
+    grayscale = _as_grayscale(image)
+    _, threshold = cv2.threshold(
+        grayscale,
+        0,
+        255,
+        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU,
+    )
+    coordinates = cv2.findNonZero(threshold)
+    if coordinates is None or len(coordinates) < 20:
+        return 0.0
+
+    angle = float(cv2.minAreaRect(coordinates)[-1])
+    if angle < -45.0:
+        return 90.0 + angle
+
+    return angle
+
+
+def _crop_foreground_region(image: np.ndarray) -> np.ndarray:
+    """Crop image to foreground bounds while preserving background margins."""
+    grayscale = _as_grayscale(image)
+    _, threshold = cv2.threshold(
+        grayscale,
+        0,
+        255,
+        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU,
+    )
+    coordinates = cv2.findNonZero(threshold)
+    if coordinates is None:
+        return image
+
+    x_coord, y_coord, width, height = cv2.boundingRect(coordinates)
+    return image[y_coord : y_coord + height, x_coord : x_coord + width]
+
+
 class DocumentPreprocessor:
     """Validate input payload constraints before alignment stages."""
 
@@ -123,6 +200,10 @@ class DocumentPreprocessor:
             DEFAULT_BOUNDARY_CANNY_THRESHOLD_HIGH
         ),
         perspective_interpolation: int = DEFAULT_PERSPECTIVE_INTERPOLATION,
+        rotation_top_band_fraction: float = (
+            DEFAULT_ROTATION_TOP_BAND_FRACTION
+        ),
+        rotation_landscape_bonus: float = DEFAULT_ROTATION_LANDSCAPE_BONUS,
     ) -> None:
         """Initialize validation limits for content type and payload size."""
         if max_file_size_bytes <= 0:
@@ -153,6 +234,16 @@ class DocumentPreprocessor:
             )
         if perspective_interpolation < 0:
             raise ValueError("perspective_interpolation must be non-negative")
+        if rotation_top_band_fraction <= 0.0:
+            raise ValueError(
+                "rotation_top_band_fraction must be greater than zero"
+            )
+        if rotation_top_band_fraction >= 1.0:
+            raise ValueError(
+                "rotation_top_band_fraction must be less than one"
+            )
+        if rotation_landscape_bonus < 0.0:
+            raise ValueError("rotation_landscape_bonus must be non-negative")
 
         source_types = (
             DEFAULT_ALLOWED_CONTENT_TYPES
@@ -182,6 +273,8 @@ class DocumentPreprocessor:
         self.boundary_canny_threshold_low = boundary_canny_threshold_low
         self.boundary_canny_threshold_high = boundary_canny_threshold_high
         self.perspective_interpolation = perspective_interpolation
+        self.rotation_top_band_fraction = rotation_top_band_fraction
+        self.rotation_landscape_bonus = rotation_landscape_bonus
 
     def detect_document_boundary(
         self,
@@ -341,6 +434,70 @@ class DocumentPreprocessor:
 
         return aligned_image
 
+    def _rotation_score(self, image: np.ndarray) -> float:
+        """Compute orientation score used for rotation normalization."""
+        grayscale_uint8 = _as_grayscale(image)
+        grayscale = grayscale_uint8.astype(np.float32)
+
+        _, threshold = cv2.threshold(
+            grayscale_uint8,
+            0,
+            255,
+            cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU,
+        )
+        row_projection = threshold.sum(axis=1).astype(np.float32)
+        col_projection = threshold.sum(axis=0).astype(np.float32)
+        horizontal_bias = float(
+            np.var(row_projection) / (np.var(col_projection) + 1e-6)
+        )
+
+        band_height = max(
+            1,
+            int(round(grayscale.shape[0] * self.rotation_top_band_fraction)),
+        )
+        top_mean = float(np.mean(grayscale[:band_height, :]))
+        bottom_mean = float(np.mean(grayscale[-band_height:, :]))
+        top_darkness_bias = (bottom_mean - top_mean) / 255.0
+
+        landscape_bias = 0.0
+        if image.shape[1] >= image.shape[0]:
+            landscape_bias = self.rotation_landscape_bonus
+
+        return horizontal_bias + top_darkness_bias + landscape_bias
+
+    def normalize_rotation(self, image: np.ndarray) -> np.ndarray:
+        """Normalize orientation for perspective-corrected document images."""
+        if image.size == 0:
+            raise UnprocessableDocumentError(
+                message="Cannot normalize rotation on an empty image.",
+                details={"reason": "empty_image"},
+            )
+        if image.ndim not in {2, 3}:
+            raise UnprocessableDocumentError(
+                message="Unsupported image shape for rotation normalization.",
+                details={"reason": "invalid_image_shape"},
+            )
+
+        skew_angle = _estimate_skew_angle(image)
+        deskewed = _rotate_bound(image, skew_angle)
+
+        candidates: tuple[np.ndarray, ...] = (
+            deskewed,
+            cv2.rotate(deskewed, cv2.ROTATE_90_CLOCKWISE),
+            cv2.rotate(deskewed, cv2.ROTATE_180),
+            cv2.rotate(deskewed, cv2.ROTATE_90_COUNTERCLOCKWISE),
+        )
+        cropped_candidates = [
+            _crop_foreground_region(candidate) for candidate in candidates
+        ]
+        scores = [
+            self._rotation_score(candidate)
+            for candidate in cropped_candidates
+        ]
+        best_index = int(np.argmax(np.asarray(scores, dtype=np.float32)))
+
+        return cropped_candidates[best_index]
+
     def _assess_readability(
         self,
         image_bytes: bytes,
@@ -497,6 +654,8 @@ __all__ = [
     "DEFAULT_BOUNDARY_CANNY_THRESHOLD_LOW",
     "DEFAULT_BOUNDARY_MIN_AREA_RATIO",
     "DEFAULT_PERSPECTIVE_INTERPOLATION",
+    "DEFAULT_ROTATION_LANDSCAPE_BONUS",
+    "DEFAULT_ROTATION_TOP_BAND_FRACTION",
     "DEFAULT_ALLOWED_CONTENT_TYPES",
     "DEFAULT_MAX_FILE_SIZE_BYTES",
     "DEFAULT_MIN_CONTRAST_STDDEV",
