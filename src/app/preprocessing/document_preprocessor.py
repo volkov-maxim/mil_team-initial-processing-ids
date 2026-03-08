@@ -498,6 +498,69 @@ class DocumentPreprocessor:
 
         return cropped_candidates[best_index]
 
+    def denoise_contrast(
+        self,
+        image: np.ndarray,
+        *,
+        apply_denoise: bool = True,
+        apply_contrast_normalization: bool = True,
+    ) -> np.ndarray:
+        """Apply optional denoise and contrast normalization for OCR."""
+        if image.size == 0:
+            raise UnprocessableDocumentError(
+                message="Cannot denoise or normalize an empty image.",
+                details={"reason": "empty_image"},
+            )
+        if image.ndim not in {2, 3}:
+            raise UnprocessableDocumentError(
+                message=(
+                    "Unsupported image shape for denoise/contrast stage."
+                ),
+                details={"reason": "invalid_image_shape"},
+            )
+
+        processed = image.copy()
+
+        if apply_denoise:
+            try:
+                if processed.ndim == 2:
+                    processed = cv2.fastNlMeansDenoising(
+                        processed,
+                        None,
+                        7,
+                        7,
+                        21,
+                    )
+                else:
+                    processed = cv2.fastNlMeansDenoisingColored(
+                        processed,
+                        None,
+                        7,
+                        7,
+                        7,
+                        21,
+                    )
+            except cv2.error:
+                pass
+
+        if apply_contrast_normalization:
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            try:
+                if processed.ndim == 2:
+                    processed = clahe.apply(processed)
+                else:
+                    lab_image = cv2.cvtColor(processed, cv2.COLOR_BGR2LAB)
+                    channel_l, channel_a, channel_b = cv2.split(lab_image)
+                    normalized_l = clahe.apply(channel_l)
+                    merged = cv2.merge(
+                        (normalized_l, channel_a, channel_b)
+                    )
+                    processed = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+            except cv2.error:
+                pass
+
+        return processed
+
     def _assess_readability(
         self,
         image_bytes: bytes,

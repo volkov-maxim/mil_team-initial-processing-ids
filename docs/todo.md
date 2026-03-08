@@ -149,7 +149,7 @@ isolated, verifiable tasks.
   - Implement: Normalize orientation after perspective correction. The angle of rotation of document on image can be arbitrary.
   - Verify: Tests with rotated fixtures yield upright alignment.
 
-- [ ] **T022** Implement denoise and contrast normalization.
+- [x] **T022** Implement denoise and contrast normalization.
   - Depends on: T021
   - Implement: Add optional denoise/contrast stage.
   - Verify: Unit tests verify transform output and no-crash behavior.
