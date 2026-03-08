@@ -185,7 +185,7 @@ isolated, verifiable tasks.
   - Implement: Add `RecognizedToken`, `RecognizedLine`, recognizer contract.
   - Verify: Unit tests validate token/line model constraints.
 
-- [ ] **T028** Implement recognizer adapter.
+- [x] **T028** Implement recognizer adapter.
   - Depends on: T027
   - Implement: Add OCR recognition call in `src/app/ocr/recognizer.py`.
   - Verify: Fixture test returns recognized tokens for detected regions.

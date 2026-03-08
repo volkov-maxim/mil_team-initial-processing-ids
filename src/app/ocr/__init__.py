@@ -7,6 +7,7 @@ from app.ocr.detector import PolygonVertex
 from app.ocr.detector import PositiveDimension
 from app.ocr.detector import TextDetector
 from app.ocr.detector import TextRegion
+from app.ocr.recognizer import EasyOCRTextRecognizer
 from app.ocr.recognizer import LineRecognitionResult
 from app.ocr.recognizer import RecognizedLine
 from app.ocr.recognizer import RecognizedToken
@@ -17,6 +18,7 @@ __all__ = [
     "BoundingBox",
     "DetectionResult",
     "EasyOCRTextDetector",
+    "EasyOCRTextRecognizer",
     "LineRecognitionResult",
     "PolygonVertex",
     "PositiveDimension",
