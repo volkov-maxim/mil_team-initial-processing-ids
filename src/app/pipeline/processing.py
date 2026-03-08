@@ -4,11 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from time import perf_counter
+from typing import Any
 
+import numpy as np
 from app.api.schemas import DocumentTypeDetected
 from app.api.schemas import ExtractedFields
 from app.core.exceptions import InputValidationError
+from app.core.exceptions import InternalProcessingError
 from app.core.exceptions import UnprocessableDocumentError
+from app.ocr.detector import EasyOCRTextDetector
+from app.ocr.detector import TextDetector
+from app.ocr.recognizer import EasyOCRTextRecognizer
+from app.ocr.recognizer import LineRecognitionResult
+from app.ocr.recognizer import TextRecognizer
+from app.ocr.recognizer import TokenRecognitionResult
 from app.pipeline.context import PipelineContext
 from app.pipeline.result import PipelineResult
 from app.preprocessing.document_preprocessor import DocumentPreprocessor
@@ -96,6 +105,33 @@ def _align_image(context: PipelineContext) -> bool:
 
 def _run_ocr(context: PipelineContext) -> bool:
     """Run OCR to generate tokens and line-level text candidates."""
+    aligned_image = context.stage_outputs.get("aligned_image_array")
+    if not isinstance(aligned_image, np.ndarray):
+        raise InternalProcessingError(
+            message="Aligned image is unavailable for OCR stage.",
+            error_code="ocr_aligned_image_missing",
+            details={"stage": "run_ocr"},
+        )
+
+    detector = _resolve_text_detector(context)
+    recognizer = _resolve_text_recognizer(context)
+
+    regions = detector.detect(aligned_image)
+    tokens = recognizer.recognize(aligned_image, regions)
+    lines = recognizer.group_tokens_to_lines(tokens)
+
+    context.stage_outputs["ocr_regions"] = regions
+    context.stage_outputs["ocr_tokens"] = tokens
+    context.stage_outputs["ocr_lines"] = lines
+    context.stage_outputs["detections"] = _serialize_token_detections(tokens)
+
+    context.metadata["ocr"] = {
+        "regions_count": len(regions),
+        "tokens_count": len(tokens),
+        "lines_count": len(lines),
+    }
+    context.metadata["ocr_lines"] = _serialize_ocr_lines(lines)
+
     return True
 
 
@@ -151,6 +187,42 @@ def _resolve_preprocessor(context: PipelineContext) -> DocumentPreprocessor:
     return preprocessor
 
 
+def _resolve_text_detector(context: PipelineContext) -> TextDetector:
+    """Resolve a request-scoped text detector instance."""
+    cached = context.stage_outputs.get("text_detector")
+    if isinstance(cached, TextDetector):
+        return cached
+
+    detector = EasyOCRTextDetector()
+    context.stage_outputs["text_detector"] = detector
+    return detector
+
+
+def _resolve_text_recognizer(context: PipelineContext) -> TextRecognizer:
+    """Resolve a request-scoped text recognizer instance."""
+    cached = context.stage_outputs.get("text_recognizer")
+    if isinstance(cached, TextRecognizer):
+        return cached
+
+    recognizer = EasyOCRTextRecognizer()
+    context.stage_outputs["text_recognizer"] = recognizer
+    return recognizer
+
+
+def _serialize_token_detections(
+    tokens: TokenRecognitionResult,
+) -> list[dict[str, Any]]:
+    """Serialize recognized tokens for pipeline/API detection payloads."""
+    return [token.model_dump(mode="json") for token in tokens]
+
+
+def _serialize_ocr_lines(
+    lines: LineRecognitionResult,
+) -> list[dict[str, Any]]:
+    """Serialize recognized OCR lines for processing metadata output."""
+    return [line.model_dump(mode="json") for line in lines]
+
+
 def _build_result(
     context: PipelineContext,
     *,
@@ -158,6 +230,15 @@ def _build_result(
     short_circuit_stage: str | None,
 ) -> PipelineResult:
     """Build a contract-valid pipeline result from current context state."""
+    detections: list[dict[str, Any]] = []
+    raw_detections = context.stage_outputs.get("detections")
+    if isinstance(raw_detections, list):
+        detections = [
+            dict(item)
+            for item in raw_detections
+            if isinstance(item, dict)
+        ]
+
     context.metadata["executed_stages"] = executed_stages
     context.metadata["short_circuited"] = short_circuit_stage is not None
     context.metadata["short_circuit_stage"] = short_circuit_stage
@@ -167,6 +248,7 @@ def _build_result(
         request_id=context.request_id,
         document_type_detected=DocumentTypeDetected.UNKNOWN,
         aligned_image=context.artifacts.get("aligned_image"),
+        detections=detections,
         fields=ExtractedFields(),
         processing_metadata=processing_metadata,
         diagnostics=context.diagnostics,

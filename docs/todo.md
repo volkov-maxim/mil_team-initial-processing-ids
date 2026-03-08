@@ -195,7 +195,7 @@ isolated, verifiable tasks.
   - Implement: Add `group_tokens_to_lines` for deterministic line assembly.
   - Verify: Unit tests with synthetic tokens assert expected line grouping.
 
-- [ ] **T030** Wire OCR stage into pipeline.
+- [x] **T030** Wire OCR stage into pipeline.
   - Depends on: T026, T029
   - Implement: Replace OCR stub with detector+recognizer flow.
   - Verify: Integration test confirms detections and OCR lines in pipeline
