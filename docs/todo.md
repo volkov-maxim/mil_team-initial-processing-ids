@@ -190,7 +190,7 @@ isolated, verifiable tasks.
   - Implement: Add OCR recognition call in `src/app/ocr/recognizer.py`.
   - Verify: Fixture test returns recognized tokens for detected regions.
 
-- [ ] **T029** Implement token-to-line grouping.
+- [x] **T029** Implement token-to-line grouping.
   - Depends on: T028
   - Implement: Add `group_tokens_to_lines` for deterministic line assembly.
   - Verify: Unit tests with synthetic tokens assert expected line grouping.

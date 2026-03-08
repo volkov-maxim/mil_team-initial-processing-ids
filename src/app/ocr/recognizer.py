@@ -102,9 +102,57 @@ class EasyOCRTextRecognizer:
         tokens: TokenRecognitionResult,
     ) -> LineRecognitionResult:
         """Group token-level outputs into stable line-level structures."""
-        raise NotImplementedError(
-            "Token-to-line grouping will be implemented in T029."
+        if not tokens:
+            return []
+
+        sorted_tokens = sorted(
+            tokens,
+            key=lambda token: (
+                _token_center_y(token),
+                token.bounding_box[1],
+                token.bounding_box[0],
+                token.text,
+            ),
         )
+
+        line_buckets: list[list[RecognizedToken]] = []
+        for token in sorted_tokens:
+            target_bucket = _find_matching_line_bucket(token, line_buckets)
+            if target_bucket is None:
+                line_buckets.append([token])
+                continue
+
+            target_bucket.append(token)
+
+        ordered_buckets = sorted(
+            line_buckets,
+            key=lambda bucket: (_line_center_y(bucket), _line_min_x(bucket)),
+        )
+
+        lines: LineRecognitionResult = []
+        for bucket in ordered_buckets:
+            ordered_tokens = sorted(
+                bucket,
+                key=lambda token: (
+                    token.bounding_box[0],
+                    _token_center_y(token),
+                    token.text,
+                ),
+            )
+            line_text = " ".join(token.text for token in ordered_tokens)
+            line_confidence = (
+                sum(token.confidence for token in ordered_tokens)
+                / len(ordered_tokens)
+            )
+            line_payload = {
+                "text": line_text,
+                "tokens": ordered_tokens,
+                "bounding_box": _merge_line_bounding_box(ordered_tokens),
+                "confidence": line_confidence,
+            }
+            lines.append(RecognizedLine.model_validate(line_payload))
+
+        return lines
 
     def _to_recognized_token(
         self,
@@ -145,6 +193,84 @@ class EasyOCRTextRecognizer:
                     "validation_error": str(error),
                 },
             ) from error
+
+
+def _token_center_y(token: RecognizedToken) -> float:
+    """Return vertical midpoint used for stable token ordering/grouping."""
+    return token.bounding_box[1] + (token.bounding_box[3] / 2.0)
+
+
+def _line_center_y(tokens: list[RecognizedToken]) -> float:
+    """Return vertical midpoint of line candidates for ordering and merge."""
+    min_y = min(token.bounding_box[1] for token in tokens)
+    max_y = max(
+        token.bounding_box[1] + token.bounding_box[3]
+        for token in tokens
+    )
+    return min_y + ((max_y - min_y) / 2.0)
+
+
+def _line_min_x(tokens: list[RecognizedToken]) -> float:
+    """Return left-most x-coordinate among line candidate tokens."""
+    return min(token.bounding_box[0] for token in tokens)
+
+
+def _line_height(tokens: list[RecognizedToken]) -> float:
+    """Return merged height of current line candidate tokens."""
+    min_y = min(token.bounding_box[1] for token in tokens)
+    max_y = max(
+        token.bounding_box[1] + token.bounding_box[3]
+        for token in tokens
+    )
+    return max_y - min_y
+
+
+def _find_matching_line_bucket(
+    token: RecognizedToken,
+    line_buckets: list[list[RecognizedToken]],
+) -> list[RecognizedToken] | None:
+    """Find best matching line for token using vertical center tolerance."""
+    token_center = _token_center_y(token)
+    token_height = token.bounding_box[3]
+
+    best_bucket: list[RecognizedToken] | None = None
+    best_distance: float | None = None
+    for bucket in line_buckets:
+        bucket_center = _line_center_y(bucket)
+        bucket_height = _line_height(bucket)
+        distance = abs(token_center - bucket_center)
+
+        # Allow grouping when centers are close relative to line/token height.
+        tolerance = max(bucket_height, token_height) * 0.6
+        if distance > tolerance:
+            continue
+
+        if best_distance is None or distance < best_distance:
+            best_distance = distance
+            best_bucket = bucket
+
+    return best_bucket
+
+
+def _merge_line_bounding_box(tokens: list[RecognizedToken]) -> BoundingBox:
+    """Merge token boxes into one axis-aligned line bounding box."""
+    min_x = min(token.bounding_box[0] for token in tokens)
+    min_y = min(token.bounding_box[1] for token in tokens)
+    max_x = max(
+        token.bounding_box[0] + token.bounding_box[2]
+        for token in tokens
+    )
+    max_y = max(
+        token.bounding_box[1] + token.bounding_box[3]
+        for token in tokens
+    )
+
+    return (
+        float(min_x),
+        float(min_y),
+        float(max_x - min_x),
+        float(max_y - min_y),
+    )
 
 
 @runtime_checkable
