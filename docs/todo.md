@@ -139,7 +139,7 @@ isolated, verifiable tasks.
     `src/app/preprocessing/document_preprocessor.py`.
   - Verify: Fixture tests detect corners/bounds on representative documents.
 
-- [ ] **T020** Implement perspective correction.
+- [x] **T020** Implement perspective correction.
   - Depends on: T019
   - Implement: Apply geometric transform to create canonical aligned image.
   - Verify: Fixture tests confirm corrected output dimensions/orientation.

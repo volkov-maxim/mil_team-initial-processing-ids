@@ -31,6 +31,7 @@ DEFAULT_BOUNDARY_MIN_AREA_RATIO = 0.05
 DEFAULT_BOUNDARY_APPROXIMATION_RATIO = 0.02
 DEFAULT_BOUNDARY_CANNY_THRESHOLD_LOW = 60
 DEFAULT_BOUNDARY_CANNY_THRESHOLD_HIGH = 180
+DEFAULT_PERSPECTIVE_INTERPOLATION = cv2.INTER_LINEAR
 
 
 class ValidationOutcome(BaseModel):
@@ -82,6 +83,23 @@ def _order_boundary_points(points: np.ndarray) -> np.ndarray:
     return ordered
 
 
+def _compute_perspective_target_size(
+    ordered_points: np.ndarray,
+) -> tuple[int, int]:
+    """Compute canonical output size from ordered boundary points."""
+    top_left, top_right, bottom_right, bottom_left = ordered_points
+
+    top_width = np.linalg.norm(top_right - top_left)
+    bottom_width = np.linalg.norm(bottom_right - bottom_left)
+    left_height = np.linalg.norm(bottom_left - top_left)
+    right_height = np.linalg.norm(bottom_right - top_right)
+
+    target_width = max(1, int(round(max(top_width, bottom_width))))
+    target_height = max(1, int(round(max(left_height, right_height))))
+
+    return target_width, target_height
+
+
 class DocumentPreprocessor:
     """Validate input payload constraints before alignment stages."""
 
@@ -104,6 +122,7 @@ class DocumentPreprocessor:
         boundary_canny_threshold_high: int = (
             DEFAULT_BOUNDARY_CANNY_THRESHOLD_HIGH
         ),
+        perspective_interpolation: int = DEFAULT_PERSPECTIVE_INTERPOLATION,
     ) -> None:
         """Initialize validation limits for content type and payload size."""
         if max_file_size_bytes <= 0:
@@ -132,6 +151,8 @@ class DocumentPreprocessor:
             raise ValueError(
                 "boundary_canny_threshold_high must exceed low threshold"
             )
+        if perspective_interpolation < 0:
+            raise ValueError("perspective_interpolation must be non-negative")
 
         source_types = (
             DEFAULT_ALLOWED_CONTENT_TYPES
@@ -160,6 +181,7 @@ class DocumentPreprocessor:
         self.boundary_approximation_ratio = boundary_approximation_ratio
         self.boundary_canny_threshold_low = boundary_canny_threshold_low
         self.boundary_canny_threshold_high = boundary_canny_threshold_high
+        self.perspective_interpolation = perspective_interpolation
 
     def detect_document_boundary(
         self,
@@ -229,18 +251,6 @@ class DocumentPreprocessor:
 
         if selected_points is None:
             largest_contour = max(contours, key=cv2.contourArea)
-            largest_area = float(cv2.contourArea(largest_contour))
-            if largest_area < min_boundary_area:
-                raise UnprocessableDocumentError(
-                    message="Unable to detect document boundary.",
-                    details={
-                        "reason": "boundary_area_below_threshold",
-                        "boundary_min_area_ratio": (
-                            self.boundary_min_area_ratio
-                        ),
-                    },
-                )
-
             rotated_rect = cv2.minAreaRect(largest_contour)
             selected_points = cv2.boxPoints(rotated_rect).astype(np.float32)
 
@@ -282,6 +292,54 @@ class DocumentPreprocessor:
             contour_area=contour_area,
             area_ratio=area_ratio,
         )
+
+    def apply_perspective_correction(
+        self,
+        image: np.ndarray,
+        boundary: BoundaryDetectionResult,
+    ) -> np.ndarray:
+        """Warp document boundary to a canonical rectangular image plane."""
+        if image.size == 0:
+            raise UnprocessableDocumentError(
+                message="Cannot correct perspective on an empty image.",
+                details={"reason": "empty_image"},
+            )
+        if image.ndim not in {2, 3}:
+            raise UnprocessableDocumentError(
+                message="Unsupported image shape for perspective correction.",
+                details={"reason": "invalid_image_shape"},
+            )
+
+        source_points = _order_boundary_points(
+            np.asarray(boundary.corners, dtype=np.float32)
+        )
+        target_width, target_height = _compute_perspective_target_size(
+            source_points
+        )
+
+        destination_points = np.array(
+            [
+                [0.0, 0.0],
+                [float(target_width - 1), 0.0],
+                [float(target_width - 1), float(target_height - 1)],
+                [0.0, float(target_height - 1)],
+            ],
+            dtype=np.float32,
+        )
+
+        transform_matrix = cv2.getPerspectiveTransform(
+            source_points,
+            destination_points,
+        )
+        aligned_image = cv2.warpPerspective(
+            image,
+            transform_matrix,
+            (target_width, target_height),
+            flags=self.perspective_interpolation,
+            borderMode=cv2.BORDER_REPLICATE,
+        )
+
+        return aligned_image
 
     def _assess_readability(
         self,
@@ -438,6 +496,7 @@ __all__ = [
     "DEFAULT_BOUNDARY_CANNY_THRESHOLD_HIGH",
     "DEFAULT_BOUNDARY_CANNY_THRESHOLD_LOW",
     "DEFAULT_BOUNDARY_MIN_AREA_RATIO",
+    "DEFAULT_PERSPECTIVE_INTERPOLATION",
     "DEFAULT_ALLOWED_CONTENT_TYPES",
     "DEFAULT_MAX_FILE_SIZE_BYTES",
     "DEFAULT_MIN_CONTRAST_STDDEV",
