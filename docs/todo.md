@@ -133,7 +133,7 @@ isolated, verifiable tasks.
     inputs.
   - Verify: Unit tests classify unreadable fixtures as invalid.
 
-- [ ] **T019** Implement document boundary detection.
+- [x] **T019** Implement document boundary detection.
   - Depends on: T016
   - Implement: Add boundary detection in
     `src/app/preprocessing/document_preprocessor.py`.
