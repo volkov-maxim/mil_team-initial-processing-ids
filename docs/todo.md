@@ -154,7 +154,7 @@ isolated, verifiable tasks.
   - Implement: Add optional denoise/contrast stage.
   - Verify: Unit tests verify transform output and no-crash behavior.
 
-- [ ] **T023** Add typed alignment diagnostics.
+- [x] **T023** Add typed alignment diagnostics.
   - Depends on: T020
   - Implement: Return structured alignment failure diagnostics.
   - Verify: Unit tests validate diagnostic payload for known failure cases.

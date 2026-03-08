@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from typing import Any
+from typing import Literal
 
 import cv2
 import numpy as np
@@ -56,6 +57,25 @@ class BoundaryDetectionResult(BaseModel):
     bounds: tuple[int, int, int, int]
     contour_area: float = Field(ge=0.0)
     area_ratio: float = Field(ge=0.0, le=1.0)
+
+
+AlignmentStage = Literal[
+    "boundary_detection",
+    "perspective_correction",
+    "rotation_normalization",
+    "denoise_contrast",
+]
+
+
+class AlignmentFailureDiagnostic(BaseModel):
+    """Typed alignment failure payload for stage-level diagnostics."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage: AlignmentStage
+    reason: str
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 def _normalize_content_type(content_type: str | None) -> str | None:
@@ -275,6 +295,89 @@ class DocumentPreprocessor:
         self.perspective_interpolation = perspective_interpolation
         self.rotation_top_band_fraction = rotation_top_band_fraction
         self.rotation_landscape_bonus = rotation_landscape_bonus
+
+    def _build_alignment_failure_error(
+        self,
+        *,
+        stage: AlignmentStage,
+        error: UnprocessableDocumentError,
+    ) -> UnprocessableDocumentError:
+        """Wrap stage failures with a structured typed diagnostic payload."""
+        source_details: dict[str, Any] = {}
+        if error.details is not None:
+            source_details = dict(error.details)
+
+        reason_value = source_details.get("reason")
+        reason = "unknown_alignment_reason"
+        if isinstance(reason_value, str) and reason_value != "":
+            reason = reason_value
+
+        diagnostic = AlignmentFailureDiagnostic(
+            stage=stage,
+            reason=reason,
+            message=error.message,
+            details=source_details,
+        )
+
+        return UnprocessableDocumentError(
+            message="Document alignment failed.",
+            details={
+                "reason": "alignment_failure",
+                "failure_stage": stage,
+                "alignment_diagnostic": diagnostic.model_dump(),
+            },
+        )
+
+    def align_image(
+        self,
+        image: np.ndarray,
+        *,
+        apply_denoise: bool = True,
+        apply_contrast_normalization: bool = True,
+    ) -> np.ndarray:
+        """Align image through boundary, perspective, rotation, and cleanup."""
+        try:
+            boundary = self.detect_document_boundary(image)
+        except UnprocessableDocumentError as error:
+            raise self._build_alignment_failure_error(
+                stage="boundary_detection",
+                error=error,
+            ) from error
+
+        try:
+            perspective_corrected = self.apply_perspective_correction(
+                image,
+                boundary,
+            )
+        except UnprocessableDocumentError as error:
+            raise self._build_alignment_failure_error(
+                stage="perspective_correction",
+                error=error,
+            ) from error
+
+        try:
+            rotation_normalized = self.normalize_rotation(
+                perspective_corrected
+            )
+        except UnprocessableDocumentError as error:
+            raise self._build_alignment_failure_error(
+                stage="rotation_normalization",
+                error=error,
+            ) from error
+
+        try:
+            return self.denoise_contrast(
+                rotation_normalized,
+                apply_denoise=apply_denoise,
+                apply_contrast_normalization=(
+                    apply_contrast_normalization
+                ),
+            )
+        except UnprocessableDocumentError as error:
+            raise self._build_alignment_failure_error(
+                stage="denoise_contrast",
+                error=error,
+            ) from error
 
     def detect_document_boundary(
         self,
@@ -711,6 +814,8 @@ class DocumentPreprocessor:
 
 
 __all__ = [
+    "AlignmentFailureDiagnostic",
+    "AlignmentStage",
     "BoundaryDetectionResult",
     "DEFAULT_BOUNDARY_APPROXIMATION_RATIO",
     "DEFAULT_BOUNDARY_CANNY_THRESHOLD_HIGH",
