@@ -118,3 +118,21 @@ def test_bank_card_extractor_keeps_required_fields_null_when_unavailable() -> No
     assert result.issuer_network == "VISA"
     assert result.bank_name == "Alfa Bank"
     assert result.full_name is None
+
+
+def test_bank_card_extractor_detects_multi_word_network_alias() -> None:
+    """Resolve issuer network aliases that contain whitespace tokens."""
+    lines = [
+        _build_line(text="AMERICAN EXPRESS", y=10.0, confidence=0.88),
+        _build_line(text="378282246310005", y=36.0),
+        _build_line(text="VALID THRU 11/29", y=62.0),
+        _build_line(text="JOHN DOE", y=88.0),
+    ]
+
+    extractor = BankCardExtractor()
+    result = extractor.extract(lines)
+
+    assert result.card_number == "378282246310005"
+    assert result.cardholder_name == "John Doe"
+    assert result.expiry_date == "2029-11-01"
+    assert result.issuer_network == "AMEX"

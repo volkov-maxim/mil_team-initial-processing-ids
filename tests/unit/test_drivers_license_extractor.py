@@ -143,3 +143,18 @@ def test_drivers_license_extractor_keeps_required_fields_null_when_missing() -> 
     assert result.place_of_residence is None
     assert result.license_class is None
     assert result.card_number is None
+
+
+def test_drivers_license_extractor_formats_compact_license_number() -> None:
+    """Normalize compact 10-digit license number to canonical spacing."""
+    lines = [
+        _build_line(
+            text="5. 7728089628",
+            y=10.0,
+        ),
+    ]
+
+    extractor = DriversLicenseExtractor()
+    result = extractor.extract(lines)
+
+    assert result.license_number == "77 28 089628"

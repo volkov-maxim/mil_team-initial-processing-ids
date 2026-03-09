@@ -147,3 +147,16 @@ def test_id_card_extractor_keeps_required_fields_null_when_unavailable() -> None
     assert result.issue_date is None
     assert result.expiry_date is None
     assert result.card_number is None
+
+
+def test_id_card_extractor_extracts_female_sex_marker() -> None:
+    """Map localized female marker to canonical ``F`` value."""
+    lines = [
+        _build_line(text="ПОЛ ЖЕН.", y=10.0),
+        _build_line(text="РОССИЙСКАЯ ФЕДЕРАЦИЯ", y=36.0),
+    ]
+
+    extractor = IdCardExtractor()
+    result = extractor.extract(lines)
+
+    assert result.sex == "F"

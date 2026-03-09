@@ -292,12 +292,18 @@ def _extract_bank_name(ocr_lines: LineRecognitionResult) -> str | None:
 
 def _contains_keyword(text: str, keyword: str) -> bool:
     """Check keyword match with word boundaries when applicable."""
-    escaped = re.escape(keyword.casefold())
+    normalized_text = text.casefold()
+    normalized_keyword = keyword.casefold()
+    escaped = re.escape(normalized_keyword)
     if keyword.isalnum():
         pattern = rf"(?<!\w){escaped}(?!\w)"
-        return re.search(pattern, text, flags=re.IGNORECASE) is not None
+        return re.search(
+            pattern,
+            normalized_text,
+            flags=re.IGNORECASE,
+        ) is not None
 
-    return escaped in text
+    return normalized_keyword in normalized_text
 
 
 def _contains_any_keyword(text: str, keywords: tuple[str, ...]) -> bool:

@@ -63,6 +63,39 @@ def test_validate_date_plausibility_rejects_future_birth_date() -> None:
     assert result.error_code == "date_out_of_range"
 
 
+def test_validate_date_plausibility_accepts_missing_whitespace_values() -> None:
+    """Treat whitespace-only date fields as missing optional values."""
+    validators = _build_validators()
+
+    result = validators.validate_date_plausibility(
+        field_name="expiry_date",
+        value="   ",
+    )
+
+    assert result.is_valid is True
+    assert result.error_code is None
+    assert result.value is None
+
+
+def test_validate_date_plausibility_enforces_expiry_future_window() -> None:
+    """Allow expiry dates in window and reject values beyond max horizon."""
+    validators = _build_validators()
+
+    allowed = validators.validate_date_plausibility(
+        field_name="expiry_date",
+        value="2056-03-09",
+    )
+    assert allowed.is_valid is True
+    assert allowed.error_code is None
+
+    rejected = validators.validate_date_plausibility(
+        field_name="expiry_date",
+        value="2056-03-10",
+    )
+    assert rejected.is_valid is False
+    assert rejected.error_code == "date_out_of_range"
+
+
 @pytest.mark.parametrize(
     ("field_name", "value"),
     [
@@ -128,3 +161,17 @@ def test_validate_number_pattern_accepts_missing_values() -> None:
 
     assert result.is_valid is True
     assert result.error_code is None
+
+
+def test_validate_number_pattern_accepts_unknown_number_field() -> None:
+    """Do not apply numeric regex checks to unknown field names."""
+    validators = _build_validators()
+
+    result = validators.validate_number_pattern(
+        field_name="issuer_network",
+        value="VISA",
+    )
+
+    assert result.is_valid is True
+    assert result.error_code is None
+    assert result.value == "VISA"

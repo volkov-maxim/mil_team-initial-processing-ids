@@ -117,6 +117,23 @@ class TestNormalizeDate:
         assert result.normalized == "2026-12-01"
         assert result.parse_status == "success"
 
+    def test_normalize_date_applies_two_digit_year_cutoff_boundary(self) -> None:
+        """Expand two-digit years deterministically around cutoff value."""
+        result = normalize_date("01.01.40")
+        assert result.normalized == "2040-01-01"
+        assert result.parse_status == "success"
+
+        result = normalize_date("01.01.41")
+        assert result.normalized == "1941-01-01"
+        assert result.parse_status == "success"
+
+    def test_normalize_date_handles_non_breaking_space_padding(self) -> None:
+        """Treat non-breaking spaces like regular whitespace around dates."""
+        result = normalize_date("\u00a019.10.1969\u00a0")
+
+        assert result.normalized == "1969-10-19"
+        assert result.parse_status == "success"
+
 
 class TestNormalizeName:
     """Tests for name normalization with spacing and casing."""
@@ -190,6 +207,13 @@ class TestNormalizeName:
 
         assert result.normalized == "O'Brien Sean"
         assert result.raw_value == "O'BRIEN SEAN"
+
+    def test_normalize_name_preserves_mixed_apostrophe_and_hyphen(self) -> None:
+        """Normalize mixed separators without changing token structure."""
+        result = normalize_name("ANNA-MARIA O'NEIL")
+
+        assert result.normalized == "Anna-Maria O'Neil"
+        assert result.raw_value == "ANNA-MARIA O'NEIL"
 
 
 class TestNormalizeDocumentNumber:

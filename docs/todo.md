@@ -370,7 +370,7 @@ isolated, verifiable tasks.
   - Implement: Add tests for 400/422/500 and valid request paths.
   - Verify: Integration test suite passes.
 
-- [ ] **T057** Add unit suites for normalizers, validators, extractors.
+- [x] **T057** Add unit suites for normalizers, validators, extractors.
   - Depends on: T033, T039, T037
   - Implement: Expand unit tests for core deterministic logic.
   - Verify: Unit test suite passes with required coverage targets.
