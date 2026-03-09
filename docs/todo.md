@@ -210,7 +210,7 @@ isolated, verifiable tasks.
   - Implement: Add `BaseExtractor` and extracted fields model.
   - Verify: Unit tests validate extractor contract and base behavior.
 
-- [ ] **T032** Implement shared extraction rule helpers.
+- [x] **T032** Implement shared extraction rule helpers.
   - Depends on: T031
   - Implement: Add regex/synonym/token cleanup helpers in
     `src/app/extraction/rules_common.py`.
