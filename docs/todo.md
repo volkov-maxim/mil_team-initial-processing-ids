@@ -216,7 +216,7 @@ isolated, verifiable tasks.
     `src/app/extraction/rules_common.py`.
   - Verify: Unit tests for helper correctness and edge cases.
 
-- [ ] **T033** Implement normalization utilities.
+- [x] **T033** Implement normalization utilities.
   - Depends on: T032
   - Implement: Add `normalize_date`, `normalize_name`, and
     `normalize_document_number`.
@@ -225,17 +225,17 @@ isolated, verifiable tasks.
 - [ ] **T034** Implement bank card extractor.
   - Depends on: T033
   - Implement: Add `BankCardExtractor` required/optional mapping logic.
-  - Verify: Unit tests with bank card OCR fixtures.
+  - Verify: Unit tests with bank card OCR fixtures from `images` folder.
 
 - [ ] **T035** Implement ID card extractor.
   - Depends on: T033
   - Implement: Add `IdCardExtractor` required/optional mapping logic.
-  - Verify: Unit tests with ID card OCR fixtures.
+  - Verify: Unit tests with ID card OCR fixtures from `images` folder.
 
 - [ ] **T036** Implement driver license extractor.
   - Depends on: T033
   - Implement: Add `DriversLicenseExtractor` required/optional mapping logic.
-  - Verify: Unit tests with license OCR fixtures.
+  - Verify: Unit tests with license OCR fixtures from `images` folder.
 
 - [ ] **T037** Implement document type dispatcher.
   - Depends on: T034, T035, T036
