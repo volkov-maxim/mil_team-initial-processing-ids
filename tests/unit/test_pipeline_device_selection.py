@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from app.core.config import AppSettings
+from app.core.exceptions import InternalProcessingError
 from app.ocr.detector import DetectionResult
 from app.pipeline.context import PipelineContext
 import app.pipeline.processing as pipeline_processing
@@ -152,8 +153,125 @@ def test_resolve_text_recognizer_uses_cuda_when_auto_and_available(
     assert isinstance(recognizer, _RecordingRecognizer)
     assert recognizer.gpu is True
     assert context.stage_outputs["ocr_device"] == "cuda"
-    assert context.metadata["ocr_device"] == {
-        "requested": "auto",
-        "resolved": "cuda",
-        "cuda_available": True,
-    }
+    metadata = context.metadata["ocr_device"]
+    assert metadata["requested"] == "auto"
+    assert metadata["resolved"] == "cuda"
+    assert metadata["cuda_available"] is True
+
+
+def test_resolve_runtime_device_rejects_budget_above_hard_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail fast when configured GPU budget exceeds the hard guardrail."""
+    monkeypatch.setattr(
+        pipeline_processing,
+        "load_settings",
+        lambda: AppSettings(
+            device_mode="cuda",
+            gpu_memory_budget_gb=11.0,
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline_processing,
+        "_is_cuda_available",
+        lambda: True,
+        raising=False,
+    )
+
+    context = PipelineContext(
+        request_id="req-budget-over-limit",
+        image_bytes=b"1",
+    )
+
+    with pytest.raises(InternalProcessingError) as exc_info:
+        pipeline_processing._resolve_ocr_runtime_device(context)
+
+    error = exc_info.value
+    assert error.error_code == "ocr_gpu_memory_budget_over_limit"
+    assert error.details is not None
+    assert error.details["configured_budget_gb"] == 11.0
+    assert error.details["max_budget_gb"] == 10.0
+
+
+def test_resolve_runtime_device_rejects_model_over_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail fast when selected OCR model requires more GPU memory."""
+    monkeypatch.setattr(
+        pipeline_processing,
+        "load_settings",
+        lambda: AppSettings(
+            device_mode="cuda",
+            gpu_memory_budget_gb=6.0,
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline_processing,
+        "_is_cuda_available",
+        lambda: True,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline_processing,
+        "_resolve_ocr_gpu_memory_requirement_gb",
+        lambda: 8.0,
+        raising=False,
+    )
+
+    context = PipelineContext(
+        request_id="req-model-over-budget",
+        image_bytes=b"1",
+    )
+
+    with pytest.raises(InternalProcessingError) as exc_info:
+        pipeline_processing._resolve_ocr_runtime_device(context)
+
+    error = exc_info.value
+    assert error.error_code == "ocr_gpu_memory_budget_exceeded"
+    assert error.details is not None
+    assert error.details["configured_budget_gb"] == 6.0
+    assert error.details["required_budget_gb"] == 8.0
+
+
+def test_resolve_runtime_device_allows_cuda_within_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Allow CUDA execution when model requirement is within budget."""
+    monkeypatch.setattr(
+        pipeline_processing,
+        "load_settings",
+        lambda: AppSettings(
+            device_mode="cuda",
+            gpu_memory_budget_gb=8.0,
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline_processing,
+        "_is_cuda_available",
+        lambda: True,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline_processing,
+        "_resolve_ocr_gpu_memory_requirement_gb",
+        lambda: 7.5,
+        raising=False,
+    )
+
+    context = PipelineContext(
+        request_id="req-model-within-budget",
+        image_bytes=b"1",
+    )
+
+    resolved = pipeline_processing._resolve_ocr_runtime_device(context)
+
+    assert resolved == "cuda"
+    metadata = context.metadata["ocr_device"]
+    assert metadata["requested"] == "cuda"
+    assert metadata["resolved"] == "cuda"
+    assert metadata["cuda_available"] is True
+    assert metadata["configured_budget_gb"] == 8.0
+    assert metadata["required_budget_gb"] == 7.5

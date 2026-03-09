@@ -18,6 +18,7 @@ def test_app_settings_defaults() -> None:
     assert settings.overlay_subdir == "overlays"
     assert settings.fallback_confidence_threshold == 0.70
     assert settings.required_field_confidence_threshold == 0.80
+    assert settings.gpu_memory_budget_gb == 10.0
 
 
 def test_app_settings_env_overrides() -> None:
@@ -32,6 +33,7 @@ def test_app_settings_env_overrides() -> None:
         "APP_OVERLAY_SUBDIR": "detected-overlay",
         "APP_FALLBACK_CONFIDENCE_THRESHOLD": "0.55",
         "APP_REQUIRED_FIELD_CONFIDENCE_THRESHOLD": "0.92",
+        "APP_GPU_MEMORY_BUDGET_GB": "8.50",
     }
 
     settings = AppSettings.from_env(env)
@@ -45,3 +47,4 @@ def test_app_settings_env_overrides() -> None:
     assert settings.overlay_subdir == "detected-overlay"
     assert settings.fallback_confidence_threshold == 0.55
     assert settings.required_field_confidence_threshold == 0.92
+    assert settings.gpu_memory_budget_gb == 8.50

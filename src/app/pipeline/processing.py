@@ -10,6 +10,7 @@ import numpy as np
 from app.api.schemas import DocumentTypeDetected
 from app.api.schemas import DocumentTypeHint
 from app.api.schemas import ExtractedFields
+from app.core.config import AppSettings
 from app.core.config import load_settings
 from app.core.exceptions import InputValidationError
 from app.core.exceptions import InternalProcessingError
@@ -73,6 +74,8 @@ _NUMBER_VALIDATION_FIELDS: tuple[str, ...] = (
 )
 
 _RUNTIME_DEVICE_VALUES = frozenset({"cpu", "cuda"})
+_MAX_GPU_MEMORY_BUDGET_GB = 10.0
+_DEFAULT_OCR_GPU_MEMORY_REQUIREMENT_GB = 8.0
 
 
 def _validate_input(context: PipelineContext) -> bool:
@@ -339,14 +342,70 @@ def _resolve_ocr_runtime_device(context: PipelineContext) -> str:
         cuda_available=cuda_available,
     )
 
+    budget_metadata = _enforce_gpu_memory_budget(
+        runtime_device=runtime_device,
+        settings=settings,
+    )
+
     context.stage_outputs["ocr_device"] = runtime_device
-    context.metadata["ocr_device"] = {
+    metadata: dict[str, Any] = {
         "requested": settings.device_mode,
         "resolved": runtime_device,
         "cuda_available": cuda_available,
     }
 
+    if budget_metadata is not None:
+        metadata.update(budget_metadata)
+
+    context.metadata["ocr_device"] = metadata
+
     return runtime_device
+
+
+def _enforce_gpu_memory_budget(
+    *,
+    runtime_device: str,
+    settings: AppSettings,
+) -> dict[str, float] | None:
+    """Validate CUDA execution against hard and model GPU memory budgets."""
+    if runtime_device != "cuda":
+        return None
+
+    configured_budget_gb = float(settings.gpu_memory_budget_gb)
+    if configured_budget_gb > _MAX_GPU_MEMORY_BUDGET_GB:
+        raise InternalProcessingError(
+            message="Configured GPU memory budget exceeds hard guardrail.",
+            error_code="ocr_gpu_memory_budget_over_limit",
+            details={
+                "stage": "run_ocr",
+                "runtime_device": runtime_device,
+                "configured_budget_gb": configured_budget_gb,
+                "max_budget_gb": _MAX_GPU_MEMORY_BUDGET_GB,
+            },
+        )
+
+    required_budget_gb = _resolve_ocr_gpu_memory_requirement_gb()
+    if required_budget_gb > configured_budget_gb:
+        raise InternalProcessingError(
+            message="Configured GPU memory budget is below model requirement.",
+            error_code="ocr_gpu_memory_budget_exceeded",
+            details={
+                "stage": "run_ocr",
+                "runtime_device": runtime_device,
+                "configured_budget_gb": configured_budget_gb,
+                "required_budget_gb": required_budget_gb,
+            },
+        )
+
+    return {
+        "configured_budget_gb": configured_budget_gb,
+        "required_budget_gb": required_budget_gb,
+    }
+
+
+def _resolve_ocr_gpu_memory_requirement_gb() -> float:
+    """Return estimated GPU memory budget required by local OCR models."""
+    return _DEFAULT_OCR_GPU_MEMORY_REQUIREMENT_GB
 
 
 def _select_runtime_device(*, device_mode: str, cuda_available: bool) -> str:

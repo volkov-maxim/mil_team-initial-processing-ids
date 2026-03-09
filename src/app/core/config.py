@@ -29,6 +29,7 @@ class AppSettings(BaseModel):
     """Typed runtime settings for the document processing service."""
 
     device_mode: str = Field(default="auto", pattern="^(cpu|cuda|auto)$")
+    gpu_memory_budget_gb: float = Field(default=10.0, gt=0.0)
     use_external_fallback_default: bool = False
     fallback_base_url: str | None = None
     fallback_proxy_url: str | None = None
@@ -51,6 +52,10 @@ class AppSettings(BaseModel):
         device_mode = source.get("APP_DEVICE_MODE")
         if device_mode is not None:
             values["device_mode"] = device_mode
+
+        gpu_memory_budget_gb = source.get("APP_GPU_MEMORY_BUDGET_GB")
+        if gpu_memory_budget_gb is not None:
+            values["gpu_memory_budget_gb"] = float(gpu_memory_budget_gb)
 
         use_external_fallback_default = source.get(
             "APP_USE_EXTERNAL_FALLBACK_DEFAULT"

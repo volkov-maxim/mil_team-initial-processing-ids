@@ -347,7 +347,7 @@ isolated, verifiable tasks.
   - Implement: Add runtime device routing in config/model-loading paths.
   - Verify: Unit tests with mocked availability validate selection/fallback.
 
-- [ ] **T054** Add GPU memory budget guardrail (`<= 10 GB`).
+- [x] **T054** Add GPU memory budget guardrail (`<= 10 GB`).
   - Depends on: T053
   - Implement: Add model/config guard checks and fail-fast diagnostics for
     over-budget runtime.
