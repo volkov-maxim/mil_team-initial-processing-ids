@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -25,6 +24,7 @@ from app.pipeline.result import PipelineResult
 from app.preprocessing.document_preprocessor import DocumentPreprocessor
 from app.preprocessing.image_io import decode_image_bytes
 from app.storage.artifacts import ArtifactStorageManager
+from app.telemetry.metrics import MetricsCollector
 from app.validation.confidence import ConfidenceScorer
 from app.validation.consistency_checks import ConsistencyChecks
 from app.validation.field_validators import FieldValidationResult
@@ -562,18 +562,15 @@ def process_document_pipeline(
 ) -> PipelineResult:
     """Run pipeline stages in strict contract order with short-circuiting."""
     handlers = _resolve_stage_handlers(stage_overrides)
+    metrics_collector = MetricsCollector()
     executed_stages: list[str] = []
     short_circuit_stage: str | None = None
-    start_total = perf_counter()
 
     for stage_name in STAGE_SEQUENCE:
         stage_handler = handlers[stage_name]
 
-        start_stage = perf_counter()
-        should_continue = stage_handler(context)
-        context.timings.stage_ms[stage_name] = (
-            perf_counter() - start_stage
-        ) * 1000.0
+        with metrics_collector.measure_stage(stage_name):
+            should_continue = stage_handler(context)
 
         executed_stages.append(stage_name)
 
@@ -581,7 +578,7 @@ def process_document_pipeline(
             short_circuit_stage = stage_name
             break
 
-    context.timings.total_ms = (perf_counter() - start_total) * 1000.0
+    context.timings = metrics_collector.as_pipeline_timings()
 
     return _build_result(
         context,

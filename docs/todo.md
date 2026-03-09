@@ -330,7 +330,7 @@ isolated, verifiable tasks.
   - Implement: Add `draw_detections` and persist annotated image.
   - Verify: Integration test confirms overlay artifact exists and is readable.
 
-- [ ] **T051** Implement per-stage latency metrics.
+- [x] **T051** Implement per-stage latency metrics.
   - Depends on: T014
   - Implement: Add `MetricsCollector` in `src/app/telemetry/metrics.py`.
   - Verify: Unit tests validate stage timing accumulation and totals.
