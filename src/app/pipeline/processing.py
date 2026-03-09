@@ -25,6 +25,7 @@ from app.preprocessing.document_preprocessor import DocumentPreprocessor
 from app.preprocessing.image_io import decode_image_bytes
 from app.storage.artifacts import ArtifactStorageManager
 from app.telemetry.metrics import MetricsCollector
+from app.telemetry.tracing import TraceContext
 from app.validation.confidence import ConfidenceScorer
 from app.validation.consistency_checks import ConsistencyChecks
 from app.validation.field_validators import FieldValidationResult
@@ -418,6 +419,7 @@ def _build_result(
     context.metadata["executed_stages"] = executed_stages
     context.metadata["short_circuited"] = short_circuit_stage is not None
     context.metadata["short_circuit_stage"] = short_circuit_stage
+    context.metadata["trace"] = _build_trace_metadata(context)
     processing_metadata = dict(context.metadata)
 
     return PipelineResult(
@@ -449,6 +451,15 @@ def _resolve_detected_document_type(
         )
 
     return DocumentTypeDetected.UNKNOWN
+
+
+def _build_trace_metadata(context: PipelineContext) -> dict[str, Any]:
+    """Build trace context metadata for the response processing payload."""
+    trace_context = TraceContext.from_pipeline_context(
+        use_external_fallback=context.use_external_fallback,
+        stage_outputs=context.stage_outputs,
+    )
+    return trace_context.model_dump(mode="json")
 
 
 def _count_non_null_fields(extracted_fields: ExtractedFields) -> int:

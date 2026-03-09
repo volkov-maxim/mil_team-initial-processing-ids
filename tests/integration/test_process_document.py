@@ -255,6 +255,37 @@ def test_process_document_returns_contract_valid_success_payload(
     )
 
 
+def test_process_document_processing_metadata_contains_trace_context(
+    monkeypatch,
+) -> None:
+    """Expose trace metadata fields for device and model provenance."""
+    _patch_stub_ocr_resolvers(monkeypatch)
+
+    client = TestClient(app)
+    files, data = _build_multipart_payload()
+
+    response = client.post(
+        "/v1/process-document",
+        files=files,
+        data=data,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    trace = payload["processing_metadata"]["trace"]
+    assert trace["device"] in {"cpu", "cuda", "auto"}
+
+    model_versions = trace["model_versions"]
+    assert "ocr_detector" in model_versions
+    assert "ocr_recognizer" in model_versions
+
+    fallback = trace["fallback"]
+    assert fallback["requested"] is False
+    assert fallback["used"] is False
+    assert fallback["status"] == "stub"
+
+
 def test_pipeline_result_contains_aligned_artifact_data() -> None:
     """Include aligned artifact metadata in direct pipeline output."""
     image_bytes = SAMPLE_DOCUMENT_PATH.read_bytes()

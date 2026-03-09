@@ -335,7 +335,7 @@ isolated, verifiable tasks.
   - Implement: Add `MetricsCollector` in `src/app/telemetry/metrics.py`.
   - Verify: Unit tests validate stage timing accumulation and totals.
 
-- [ ] **T052** Implement trace context metadata.
+- [x] **T052** Implement trace context metadata.
   - Depends on: T051, T048
   - Implement: Add `TraceContext` in `src/app/telemetry/tracing.py` for device,
     model versions, fallback usage.
