@@ -205,7 +205,7 @@ isolated, verifiable tasks.
 
 ## Phase 4 — Extraction & Normalization
 
-- [ ] **T031** Add extraction base interface.
+- [x] **T031** Add extraction base interface.
   - Depends on: T030
   - Implement: Add `BaseExtractor` and extracted fields model.
   - Verify: Unit tests validate extractor contract and base behavior.
