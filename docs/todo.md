@@ -325,7 +325,7 @@ isolated, verifiable tasks.
   - Implement: Add request-scoped artifact directory creation and persistence in `src/app/storage/artifacts.py`. Add persistence of an aligned image.
   - Verify: Integration test verifies aligned image path persistence, aligned image exists and is readable. 
 
-- [ ] **T050** Implement detection overlay rendering.
+- [x] **T050** Implement detection overlay rendering.
   - Depends on: T030, T049
   - Implement: Add `draw_detections` and persist annotated image.
   - Verify: Integration test confirms overlay artifact exists and is readable.

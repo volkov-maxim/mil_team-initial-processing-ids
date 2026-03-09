@@ -312,6 +312,43 @@ def test_pipeline_persists_aligned_image_request_artifact(
     assert aligned_artifact["path"] == result.aligned_image
 
 
+def test_pipeline_persists_detection_overlay_request_artifact(
+    tmp_path: Path,
+) -> None:
+    """Persist detection overlay image and expose a readable artifact path."""
+    image_bytes = SAMPLE_DOCUMENT_PATH.read_bytes()
+    storage_manager = ArtifactStorageManager(artifacts_root=tmp_path)
+
+    context = PipelineContext(
+        request_id="req-overlay-persisted",
+        image_bytes=image_bytes,
+        metadata={"content_type": "image/jpeg"},
+        stage_outputs={
+            **_build_stub_ocr_stage_outputs(),
+            "artifact_storage_manager": storage_manager,
+        },
+    )
+
+    result = process_document_pipeline(context)
+
+    overlay_artifact = result.processing_metadata["overlay_artifact"]
+    overlay_path = Path(overlay_artifact["path"])
+
+    assert overlay_path.exists()
+    assert overlay_path.is_file()
+
+    overlay_image = cv2.imread(
+        str(overlay_path),
+        cv2.IMREAD_UNCHANGED,
+    )
+    assert overlay_image is not None
+    assert overlay_image.size > 0
+
+    assert overlay_artifact["height"] > 0
+    assert overlay_artifact["width"] > 0
+    assert overlay_artifact["channels"] in {1, 3}
+
+
 def test_pipeline_result_includes_detections_and_ocr_lines() -> None:
     """Include OCR detections and grouped line outputs in pipeline result."""
 

@@ -135,15 +135,28 @@ def _run_ocr(context: PipelineContext) -> bool:
 
     detector = _resolve_text_detector(context)
     recognizer = _resolve_text_recognizer(context)
+    storage_manager = _resolve_artifact_storage_manager(context)
 
     regions = detector.detect(aligned_image)
     tokens = recognizer.recognize(aligned_image, regions)
     lines = recognizer.group_tokens_to_lines(tokens)
+    detections = _serialize_token_detections(tokens)
 
     context.stage_outputs["ocr_regions"] = regions
     context.stage_outputs["ocr_tokens"] = tokens
     context.stage_outputs["ocr_lines"] = lines
-    context.stage_outputs["detections"] = _serialize_token_detections(tokens)
+    context.stage_outputs["detections"] = detections
+
+    overlay_image = storage_manager.draw_detections(
+        aligned_image=aligned_image,
+        detections=detections,
+    )
+    overlay_artifact = storage_manager.persist_detection_overlay(
+        request_id=context.request_id,
+        overlay_image=overlay_image,
+    )
+    context.artifacts["overlay_image"] = overlay_artifact.path
+    context.metadata["overlay_artifact"] = overlay_artifact.as_metadata()
 
     context.metadata["ocr"] = {
         "regions_count": len(regions),
