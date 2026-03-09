@@ -222,20 +222,20 @@ isolated, verifiable tasks.
     `normalize_document_number`.
   - Verify: Unit tests for parse status, formatting, and fallback behavior.
 
-- [ ] **T034** Implement bank card extractor.
+- [x] **T034** Implement bank card extractor.
   - Depends on: T033
-  - Implement: Add `BankCardExtractor` required/optional mapping logic.
+  - Implement: Add `BankCardExtractor` required/optional mapping logic. Use `Bank Card Schema` from `docs\high-level-spec.md` file.
   - Verify: Unit tests with bank card OCR fixtures from `images` folder.
 
 - [ ] **T035** Implement ID card extractor.
   - Depends on: T033
-  - Implement: Add `IdCardExtractor` required/optional mapping logic.
+  - Implement: Add `IdCardExtractor` required/optional mapping logic for Russian passport. Use `ID Card Schema` from `docs\high-level-spec.md` file.
   - Verify: Unit tests with ID card OCR fixtures from `images` folder.
 
-- [ ] **T036** Implement driver license extractor.
+- [ ] **T036** Implement driver's license extractor.
   - Depends on: T033
-  - Implement: Add `DriversLicenseExtractor` required/optional mapping logic.
-  - Verify: Unit tests with license OCR fixtures from `images` folder.
+  - Implement: Add `DriversLicenseExtractor` required/optional mapping logic for Russian driver's license. Use `Driver’s License Schema` from `docs\high-level-spec.md` file.
+  - Verify: Unit tests with driver's license OCR fixtures from `images` folder.
 
 - [ ] **T037** Implement document type dispatcher.
   - Depends on: T034, T035, T036
