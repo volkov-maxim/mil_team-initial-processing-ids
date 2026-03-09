@@ -8,7 +8,9 @@ import numpy as np
 from fastapi.testclient import TestClient
 import pytest
 
+from app.api.schemas import DocumentTypeDetected
 from app.api.schemas import DocumentTypeHint
+from app.api.schemas import ExtractedFields
 from app.core.exceptions import InputValidationError
 from app.main import app
 from app.ocr.detector import DetectionResult
@@ -20,6 +22,7 @@ from app.ocr.recognizer import TokenRecognitionResult
 from app.pipeline.context import PipelineContext
 from app.pipeline.processing import STAGE_SEQUENCE
 from app.pipeline.processing import process_document_pipeline
+from app.pipeline.result import PipelineResult
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_DOCUMENT_PATH = (
@@ -430,6 +433,89 @@ def test_pipeline_validation_stage_populates_flags_and_confidence() -> None:
         "validation_flags"
     ]
     assert validation_metadata["aggregate_confidence"] > 0.0
+
+
+def test_pipeline_partial_extraction_keeps_explicit_null_fields() -> None:
+    """Keep missing fields explicit as nulls in pipeline results."""
+    image_bytes = SAMPLE_DOCUMENT_PATH.read_bytes()
+    context = PipelineContext(
+        request_id="req-partial-pipeline",
+        image_bytes=image_bytes,
+        document_type_hint=DocumentTypeHint.AUTO,
+        metadata={"content_type": "image/jpeg"},
+    )
+
+    def _extract_partial_fields(stage_context: PipelineContext) -> bool:
+        stage_context.stage_outputs["document_type_detected"] = (
+            DocumentTypeDetected.BANK_CARD
+        )
+        stage_context.stage_outputs["extracted_fields"] = {
+            "cardholder_name": "Mr. Alioth",
+        }
+        stage_context.metadata["extraction"] = {
+            "document_type_detected": "bank_card",
+            "extractor": "PartialExtractorStub",
+            "non_null_field_count": 1,
+        }
+        return True
+
+    result = process_document_pipeline(
+        context,
+        stage_overrides={
+            "run_ocr": _build_run_ocr_stage_override(["MR. ALIOTH"]),
+            "extract_fields": _extract_partial_fields,
+        },
+    )
+
+    field_payload = result.fields.model_dump()
+    assert set(field_payload.keys()) == set(ExtractedFields.model_fields.keys())
+    assert field_payload["cardholder_name"] == "Mr. Alioth"
+    assert field_payload["card_number"] is None
+    assert field_payload["expiry_date"] is None
+
+
+def test_process_document_partial_extraction_returns_null_fields(
+    monkeypatch,
+) -> None:
+    """Return 200 and explicit null fields for partial extraction payloads."""
+
+    def _return_partial_pipeline_result(
+        context: PipelineContext,
+    ) -> PipelineResult:
+        return PipelineResult(
+            request_id=context.request_id,
+            document_type_detected=DocumentTypeDetected.BANK_CARD,
+            aligned_image=f"artifacts/{context.request_id}/aligned-image.png",
+            detections=[],
+            fields=ExtractedFields(cardholder_name="Mr. Alioth"),
+            field_confidence={"cardholder_name": 0.92},
+            validation_flags=[],
+            processing_metadata={"partial_extraction": True},
+        )
+
+    monkeypatch.setattr(
+        api_routes,
+        "process_document_pipeline",
+        _return_partial_pipeline_result,
+    )
+
+    client = TestClient(app)
+    files, data = _build_multipart_payload()
+
+    response = client.post(
+        "/v1/process-document",
+        files=files,
+        data=data,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    field_payload = payload["fields"]
+
+    assert set(field_payload.keys()) == set(ExtractedFields.model_fields.keys())
+    assert field_payload["cardholder_name"] == "Mr. Alioth"
+    assert field_payload["card_number"] is None
+    assert field_payload["expiry_date"] is None
 
 
 def test_process_document_maps_pipeline_errors_to_typed_envelope(

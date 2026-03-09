@@ -275,7 +275,7 @@ isolated, verifiable tasks.
   - Verify: Integration test confirms `validation_flags` and
     `field_confidence` are populated.
 
-- [ ] **T043** Enforce partial extraction contract with explicit nulls.
+- [x] **T043** Enforce partial extraction contract with explicit nulls.
   - Depends on: T042, T010
   - Implement: Ensure missing fields remain explicit `null` in response model
     and pipeline result.

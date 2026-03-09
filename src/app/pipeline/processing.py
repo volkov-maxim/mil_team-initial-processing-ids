@@ -28,6 +28,7 @@ from app.validation.confidence import ConfidenceScorer
 from app.validation.consistency_checks import ConsistencyChecks
 from app.validation.field_validators import FieldValidationResult
 from app.validation.field_validators import FieldValidators
+from pydantic import ValidationError
 
 StageHandler = Callable[[PipelineContext], bool]
 
@@ -194,15 +195,7 @@ def _extract_fields(context: PipelineContext) -> bool:
 
 def _validate_fields(context: PipelineContext) -> bool:
     """Validate extracted fields and compute consistency flags."""
-    raw_fields = context.stage_outputs.get("extracted_fields")
-    if not isinstance(raw_fields, ExtractedFields):
-        raise InternalProcessingError(
-            message="Extracted fields are unavailable for validation stage.",
-            error_code="validation_fields_missing",
-            details={"stage": "validate_fields"},
-        )
-
-    extracted_fields = raw_fields
+    extracted_fields = _resolve_validation_fields(context)
     detected_type = _resolve_detected_document_type(context)
 
     field_validators = _resolve_field_validators(context)
@@ -380,10 +373,7 @@ def _build_result(
 
     detected_type = _resolve_detected_document_type(context)
 
-    fields = ExtractedFields()
-    raw_fields = context.stage_outputs.get("extracted_fields")
-    if isinstance(raw_fields, ExtractedFields):
-        fields = raw_fields
+    fields = _resolve_result_fields(context.stage_outputs.get("extracted_fields"))
 
     field_confidence: dict[str, float] = {}
     raw_field_confidence = context.stage_outputs.get("field_confidence")
@@ -444,6 +434,51 @@ def _count_non_null_fields(extracted_fields: ExtractedFields) -> int:
     """Count extracted fields that have non-null values."""
     payload = extracted_fields.model_dump()
     return sum(value is not None for value in payload.values())
+
+
+def _resolve_validation_fields(context: PipelineContext) -> ExtractedFields:
+    """Resolve extracted fields for validation stage with strict checks."""
+    raw_fields = context.stage_outputs.get("extracted_fields")
+    if isinstance(raw_fields, ExtractedFields):
+        return raw_fields
+
+    if isinstance(raw_fields, Mapping):
+        try:
+            coerced_fields = ExtractedFields.model_validate(dict(raw_fields))
+        except ValidationError as exc:
+            raise InternalProcessingError(
+                message=(
+                    "Extracted fields payload is invalid for validation stage."
+                ),
+                error_code="validation_fields_invalid",
+                details={
+                    "stage": "validate_fields",
+                    "errors": exc.errors(),
+                },
+            ) from exc
+
+        context.stage_outputs["extracted_fields"] = coerced_fields
+        return coerced_fields
+
+    raise InternalProcessingError(
+        message="Extracted fields are unavailable for validation stage.",
+        error_code="validation_fields_missing",
+        details={"stage": "validate_fields"},
+    )
+
+
+def _resolve_result_fields(raw_fields: object) -> ExtractedFields:
+    """Resolve result fields and preserve explicit-null defaults."""
+    if isinstance(raw_fields, ExtractedFields):
+        return raw_fields
+
+    if isinstance(raw_fields, Mapping):
+        try:
+            return ExtractedFields.model_validate(dict(raw_fields))
+        except ValidationError:
+            return ExtractedFields()
+
+    return ExtractedFields()
 
 
 def _collect_field_validation_flags(
