@@ -264,7 +264,7 @@ isolated, verifiable tasks.
   - Implement: Add `ConsistencyChecks` for conflicting/mismatched fields. This relates to date-chronology consistency only.
   - Verify: Unit tests for consistency flag generation.
 
-- [ ] **T041** Implement confidence aggregation.
+- [x] **T041** Implement confidence aggregation.
   - Depends on: T039
   - Implement: Add `ConfidenceScorer` in `src/app/validation/confidence.py`.
   - Verify: Unit tests for per-field and aggregate confidence calculations.
