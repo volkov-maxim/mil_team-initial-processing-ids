@@ -24,6 +24,10 @@ from app.pipeline.context import PipelineContext
 from app.pipeline.result import PipelineResult
 from app.preprocessing.document_preprocessor import DocumentPreprocessor
 from app.preprocessing.image_io import decode_image_bytes
+from app.validation.confidence import ConfidenceScorer
+from app.validation.consistency_checks import ConsistencyChecks
+from app.validation.field_validators import FieldValidationResult
+from app.validation.field_validators import FieldValidators
 
 StageHandler = Callable[[PipelineContext], bool]
 
@@ -50,6 +54,18 @@ _DETECTED_TYPE_BY_HINT: dict[DocumentTypeHint, DocumentTypeDetected] = {
     DocumentTypeHint.ID_CARD: DocumentTypeDetected.ID_CARD,
     DocumentTypeHint.DRIVERS_LICENSE: DocumentTypeDetected.DRIVERS_LICENSE,
 }
+
+_DATE_VALIDATION_FIELDS: tuple[str, ...] = (
+    "date_of_birth",
+    "issue_date",
+    "expiry_date",
+)
+
+_NUMBER_VALIDATION_FIELDS: tuple[str, ...] = (
+    "card_number",
+    "document_number",
+    "license_number",
+)
 
 
 def _validate_input(context: PipelineContext) -> bool:
@@ -178,6 +194,47 @@ def _extract_fields(context: PipelineContext) -> bool:
 
 def _validate_fields(context: PipelineContext) -> bool:
     """Validate extracted fields and compute consistency flags."""
+    raw_fields = context.stage_outputs.get("extracted_fields")
+    if not isinstance(raw_fields, ExtractedFields):
+        raise InternalProcessingError(
+            message="Extracted fields are unavailable for validation stage.",
+            error_code="validation_fields_missing",
+            details={"stage": "validate_fields"},
+        )
+
+    extracted_fields = raw_fields
+    detected_type = _resolve_detected_document_type(context)
+
+    field_validators = _resolve_field_validators(context)
+    consistency_checks = _resolve_consistency_checks(context)
+    confidence_scorer = _resolve_confidence_scorer(context)
+
+    field_validation_flags = _collect_field_validation_flags(
+        validators=field_validators,
+        fields=extracted_fields,
+    )
+    consistency_flags = consistency_checks.generate_flags(extracted_fields)
+    validation_flags = _merge_validation_flags(
+        field_validation_flags,
+        consistency_flags,
+    )
+
+    confidence_result = confidence_scorer.score(
+        fields=extracted_fields,
+        document_type=detected_type,
+        validation_flags=validation_flags,
+    )
+
+    context.stage_outputs["validation_flags"] = validation_flags
+    context.stage_outputs["field_confidence"] = (
+        confidence_result.field_confidence
+    )
+    context.metadata["validation"] = {
+        "validation_flags": validation_flags,
+        "flags_count": len(validation_flags),
+        "aggregate_confidence": confidence_result.aggregate_confidence,
+    }
+
     return True
 
 
@@ -258,6 +315,39 @@ def _resolve_document_dispatcher(
     return dispatcher
 
 
+def _resolve_field_validators(context: PipelineContext) -> FieldValidators:
+    """Resolve a request-scoped field-validators instance."""
+    cached = context.stage_outputs.get("field_validators")
+    if isinstance(cached, FieldValidators):
+        return cached
+
+    validators = FieldValidators()
+    context.stage_outputs["field_validators"] = validators
+    return validators
+
+
+def _resolve_consistency_checks(context: PipelineContext) -> ConsistencyChecks:
+    """Resolve a request-scoped consistency-checks instance."""
+    cached = context.stage_outputs.get("consistency_checks")
+    if isinstance(cached, ConsistencyChecks):
+        return cached
+
+    checks = ConsistencyChecks()
+    context.stage_outputs["consistency_checks"] = checks
+    return checks
+
+
+def _resolve_confidence_scorer(context: PipelineContext) -> ConfidenceScorer:
+    """Resolve a request-scoped confidence scorer instance."""
+    cached = context.stage_outputs.get("confidence_scorer")
+    if isinstance(cached, ConfidenceScorer):
+        return cached
+
+    scorer = ConfidenceScorer()
+    context.stage_outputs["confidence_scorer"] = scorer
+    return scorer
+
+
 def _serialize_token_detections(
     tokens: TokenRecognitionResult,
 ) -> list[dict[str, Any]]:
@@ -295,6 +385,25 @@ def _build_result(
     if isinstance(raw_fields, ExtractedFields):
         fields = raw_fields
 
+    field_confidence: dict[str, float] = {}
+    raw_field_confidence = context.stage_outputs.get("field_confidence")
+    if isinstance(raw_field_confidence, Mapping):
+        for field_name, score in raw_field_confidence.items():
+            if not isinstance(field_name, str):
+                continue
+            if not isinstance(score, int | float):
+                continue
+            field_confidence[field_name] = float(score)
+
+    validation_flags: list[str] = []
+    raw_validation_flags = context.stage_outputs.get("validation_flags")
+    if isinstance(raw_validation_flags, list):
+        validation_flags = [
+            flag
+            for flag in raw_validation_flags
+            if isinstance(flag, str)
+        ]
+
     context.metadata["executed_stages"] = executed_stages
     context.metadata["short_circuited"] = short_circuit_stage is not None
     context.metadata["short_circuit_stage"] = short_circuit_stage
@@ -306,6 +415,8 @@ def _build_result(
         aligned_image=context.artifacts.get("aligned_image"),
         detections=detections,
         fields=fields,
+        field_confidence=field_confidence,
+        validation_flags=validation_flags,
         processing_metadata=processing_metadata,
         diagnostics=context.diagnostics,
         timings=context.timings,
@@ -333,6 +444,59 @@ def _count_non_null_fields(extracted_fields: ExtractedFields) -> int:
     """Count extracted fields that have non-null values."""
     payload = extracted_fields.model_dump()
     return sum(value is not None for value in payload.values())
+
+
+def _collect_field_validation_flags(
+    *,
+    validators: FieldValidators,
+    fields: ExtractedFields,
+) -> list[str]:
+    """Collect deterministic field-level validation error flags."""
+    flags: list[str] = []
+
+    for field_name in _DATE_VALIDATION_FIELDS:
+        value = getattr(fields, field_name)
+        result = validators.validate_date_plausibility(
+            field_name=field_name,
+            value=value,
+        )
+        _append_field_validation_flag(flags=flags, result=result)
+
+    for field_name in _NUMBER_VALIDATION_FIELDS:
+        value = getattr(fields, field_name)
+        result = validators.validate_number_pattern(
+            field_name=field_name,
+            value=value,
+        )
+        _append_field_validation_flag(flags=flags, result=result)
+
+    return flags
+
+
+def _append_field_validation_flag(
+    *,
+    flags: list[str],
+    result: FieldValidationResult,
+) -> None:
+    """Append one field-level validation flag when validation fails."""
+    if result.is_valid or result.error_code is None:
+        return
+
+    flag = f"{result.field_name}:{result.error_code}"
+    if flag not in flags:
+        flags.append(flag)
+
+
+def _merge_validation_flags(*groups: list[str]) -> list[str]:
+    """Merge flag groups while preserving first-seen order."""
+    merged: list[str] = []
+    for group in groups:
+        for flag in group:
+            if flag in merged:
+                continue
+            merged.append(flag)
+
+    return merged
 
 
 def process_document_pipeline(

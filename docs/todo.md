@@ -269,7 +269,7 @@ isolated, verifiable tasks.
   - Implement: Add `ConfidenceScorer` in `src/app/validation/confidence.py`.
   - Verify: Unit tests for per-field and aggregate confidence calculations.
 
-- [ ] **T042** Wire validation/confidence stage into pipeline.
+- [x] **T042** Wire validation/confidence stage into pipeline.
   - Depends on: T040, T041
   - Implement: Replace validation stub with validators, checks, and scoring.
   - Verify: Integration test confirms `validation_flags` and

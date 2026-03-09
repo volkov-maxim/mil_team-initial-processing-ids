@@ -25,6 +25,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_DOCUMENT_PATH = (
     PROJECT_ROOT / "images" / "bank_cards" / "bank-cards.jpg"
 )
+SAMPLE_DRIVER_LICENSE_PATH = (
+    PROJECT_ROOT / "images" / "drivers_licenses" / "orig.png"
+)
 
 
 def _build_stub_tokens() -> TokenRecognitionResult:
@@ -383,6 +386,50 @@ def test_pipeline_extraction_stage_maps_all_document_types(
     fields = result.fields.model_dump()
     for field_name, expected_value in expected_fields.items():
         assert fields[field_name] == expected_value
+
+
+def test_pipeline_validation_stage_populates_flags_and_confidence() -> None:
+    """Populate validation flags and field confidence in pipeline result."""
+    image_bytes = SAMPLE_DRIVER_LICENSE_PATH.read_bytes()
+    context = PipelineContext(
+        request_id="req-validation-populated",
+        image_bytes=image_bytes,
+        document_type_hint=DocumentTypeHint.AUTO,
+        metadata={"content_type": "image/png"},
+    )
+
+    ocr_texts = [
+        "1. МИТИН",
+        "2. АНДРЕЙ ВЛАДИМИРОВИЧ",
+        "3. 04.09.1984",
+        "МОСКВА",
+        "4a) 21.07.2027    4b) 21.07.2026",
+        "4c) ГИБДД 7723",
+        "5. 77 28 089628",
+        "8. МОСКВА",
+        "9. B",
+    ]
+
+    result = process_document_pipeline(
+        context,
+        stage_overrides={
+            "run_ocr": _build_run_ocr_stage_override(ocr_texts),
+        },
+    )
+
+    assert "issue_date_after_expiry_date" in result.validation_flags
+    assert "issue_date:date_out_of_range" in result.validation_flags
+
+    assert result.field_confidence["full_name"] == pytest.approx(0.85)
+    assert result.field_confidence["issue_date"] == pytest.approx(0.65)
+    assert result.field_confidence["expiry_date"] == pytest.approx(0.65)
+
+    validation_metadata = result.processing_metadata["validation"]
+    assert validation_metadata["flags_count"] >= 2
+    assert "issue_date_after_expiry_date" in validation_metadata[
+        "validation_flags"
+    ]
+    assert validation_metadata["aggregate_confidence"] > 0.0
 
 
 def test_process_document_maps_pipeline_errors_to_typed_envelope(
