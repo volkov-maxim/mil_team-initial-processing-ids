@@ -387,11 +387,11 @@ isolated, verifiable tasks.
     startup checks.
   - Verify: `docker compose up` produces a working API service end-to-end.
 
-- [ ] **T060** Finalize README architecture rationale and run instructions.
+- [x] **T060** Finalize README architecture rationale and run instructions.
   - Depends on: T059
   - Implement: Document architecture, model choices, device mode behavior,
-    fallback config, and test/run steps.
-  - Verify: Fresh setup from README succeeds on a clean machine.
+    fallback config, and test/run steps. Add only necessary and sufficient information about the project and its installation. Be concise and attentive to important things. 
+  - Verify: Information in README is enough to succeeds a fresh setup on a clean machine.
 
 ---
 
