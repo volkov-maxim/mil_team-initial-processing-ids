@@ -24,6 +24,7 @@ from app.pipeline.context import PipelineContext
 from app.pipeline.result import PipelineResult
 from app.preprocessing.document_preprocessor import DocumentPreprocessor
 from app.preprocessing.image_io import decode_image_bytes
+from app.storage.artifacts import ArtifactStorageManager
 from app.validation.confidence import ConfidenceScorer
 from app.validation.consistency_checks import ConsistencyChecks
 from app.validation.field_validators import FieldValidationResult
@@ -105,25 +106,19 @@ def _validate_input(context: PipelineContext) -> bool:
 def _align_image(context: PipelineContext) -> bool:
     """Align document geometry before OCR and extraction stages."""
     preprocessor = _resolve_preprocessor(context)
+    storage_manager = _resolve_artifact_storage_manager(context)
     source_image = decode_image_bytes(context.image_bytes)
     aligned_image_array = preprocessor.align_image(source_image)
 
     context.stage_outputs["aligned_image_array"] = aligned_image_array
 
-    artifact_path = f"artifacts/{context.request_id}/aligned-image.png"
-    context.artifacts["aligned_image"] = artifact_path
+    aligned_artifact = storage_manager.persist_aligned_image(
+        request_id=context.request_id,
+        aligned_image=aligned_image_array,
+    )
 
-    height, width = aligned_image_array.shape[:2]
-    channels = 1
-    if aligned_image_array.ndim == 3:
-        channels = int(aligned_image_array.shape[2])
-
-    context.metadata["aligned_artifact"] = {
-        "path": artifact_path,
-        "height": int(height),
-        "width": int(width),
-        "channels": channels,
-    }
+    context.artifacts["aligned_image"] = aligned_artifact.path
+    context.metadata["aligned_artifact"] = aligned_artifact.as_metadata()
 
     return True
 
@@ -271,6 +266,19 @@ def _resolve_preprocessor(context: PipelineContext) -> DocumentPreprocessor:
     preprocessor = DocumentPreprocessor()
     context.stage_outputs["preprocessor"] = preprocessor
     return preprocessor
+
+
+def _resolve_artifact_storage_manager(
+    context: PipelineContext,
+) -> ArtifactStorageManager:
+    """Resolve a request-scoped artifact storage manager instance."""
+    cached = context.stage_outputs.get("artifact_storage_manager")
+    if isinstance(cached, ArtifactStorageManager):
+        return cached
+
+    manager = ArtifactStorageManager.from_settings()
+    context.stage_outputs["artifact_storage_manager"] = manager
+    return manager
 
 
 def _resolve_text_detector(context: PipelineContext) -> TextDetector:

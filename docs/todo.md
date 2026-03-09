@@ -320,11 +320,10 @@ isolated, verifiable tasks.
 
 ## Phase 7 — Device Control, Performance, Reliability
 
-- [ ] **T049** Implement artifact storage manager.
+- [x] **T049** Implement artifact storage manager.
   - Depends on: T024
-  - Implement: Add request-scoped artifact directory creation and persistence in
-    `src/app/storage/artifacts.py`.
-  - Verify: Integration test verifies aligned image path persistence.
+  - Implement: Add request-scoped artifact directory creation and persistence in `src/app/storage/artifacts.py`. Add persistence of an aligned image.
+  - Verify: Integration test verifies aligned image path persistence, aligned image exists and is readable. 
 
 - [ ] **T050** Implement detection overlay rendering.
   - Depends on: T030, T049

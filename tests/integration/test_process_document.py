@@ -4,6 +4,7 @@ from pathlib import Path
 
 import app.api.routes as api_routes
 import app.pipeline.processing as pipeline_processing
+import cv2
 import numpy as np
 from fastapi.testclient import TestClient
 import pytest
@@ -23,6 +24,7 @@ from app.pipeline.context import PipelineContext
 from app.pipeline.processing import STAGE_SEQUENCE
 from app.pipeline.processing import process_document_pipeline
 from app.pipeline.result import PipelineResult
+from app.storage.artifacts import ArtifactStorageManager
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_DOCUMENT_PATH = (
@@ -273,6 +275,41 @@ def test_pipeline_result_contains_aligned_artifact_data() -> None:
     assert aligned_artifact["height"] > 0
     assert aligned_artifact["width"] > 0
     assert aligned_artifact["channels"] in {1, 3}
+
+
+def test_pipeline_persists_aligned_image_request_artifact(
+    tmp_path: Path,
+) -> None:
+    """Persist aligned image and expose a readable request artifact path."""
+    image_bytes = SAMPLE_DOCUMENT_PATH.read_bytes()
+    storage_manager = ArtifactStorageManager(artifacts_root=tmp_path)
+
+    context = PipelineContext(
+        request_id="req-aligned-persisted",
+        image_bytes=image_bytes,
+        metadata={"content_type": "image/jpeg"},
+        stage_outputs={
+            **_build_stub_ocr_stage_outputs(),
+            "artifact_storage_manager": storage_manager,
+        },
+    )
+
+    result = process_document_pipeline(context)
+
+    assert result.aligned_image is not None
+    artifact_path = Path(result.aligned_image)
+    assert artifact_path.exists()
+    assert artifact_path.is_file()
+
+    persisted_image = cv2.imread(
+        str(artifact_path),
+        cv2.IMREAD_UNCHANGED,
+    )
+    assert persisted_image is not None
+    assert persisted_image.size > 0
+
+    aligned_artifact = result.processing_metadata["aligned_artifact"]
+    assert aligned_artifact["path"] == result.aligned_image
 
 
 def test_pipeline_result_includes_detections_and_ocr_lines() -> None:
