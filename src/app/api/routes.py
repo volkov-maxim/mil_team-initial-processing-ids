@@ -16,8 +16,22 @@ from app.api.schemas import ProcessDocumentResponse
 from app.api.schemas import parse_process_document_request
 from app.pipeline.context import PipelineContext
 from app.pipeline.processing import process_document_pipeline
+from app.pipeline.result import PipelineResult
 
 router = APIRouter(prefix="/v1", tags=["document-processing"])
+
+
+def _compose_processing_metadata(
+    pipeline_result: PipelineResult,
+) -> dict[str, object]:
+    """Compose stable processing metadata for API responses."""
+    metadata: dict[str, object] = dict(pipeline_result.processing_metadata)
+    metadata["timings"] = pipeline_result.timings.model_dump(mode="json")
+    metadata["diagnostics"] = [
+        diagnostic.model_dump(mode="json")
+        for diagnostic in pipeline_result.diagnostics
+    ]
+    return metadata
 
 
 @router.post(
@@ -36,7 +50,7 @@ async def process_document(
         Depends(parse_process_document_request),
     ],
 ) -> ProcessDocumentResponse:
-    """Process a single document image and return placeholder output."""
+    """Process a single document image and return structured output."""
     request_id = getattr(request.state, "request_id", "unknown")
     image_bytes = await payload.image.read()
 
@@ -53,6 +67,8 @@ async def process_document(
     if aligned_image is None:
         aligned_image = f"artifacts/{request_id}/aligned-placeholder.png"
 
+    processing_metadata = _compose_processing_metadata(pipeline_result)
+
     return ProcessDocumentResponse(
         request_id=pipeline_result.request_id,
         document_type_detected=pipeline_result.document_type_detected,
@@ -61,7 +77,7 @@ async def process_document(
         fields=pipeline_result.fields,
         field_confidence=pipeline_result.field_confidence,
         validation_flags=pipeline_result.validation_flags,
-        processing_metadata=pipeline_result.processing_metadata,
+        processing_metadata=processing_metadata,
     )
 
 

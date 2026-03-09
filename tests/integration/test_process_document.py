@@ -245,14 +245,23 @@ def test_process_document_returns_contract_valid_success_payload(
     assert payload["aligned_image"] == (
         f"artifacts/{payload['request_id']}/aligned-image.png"
     )
-    aligned_artifact = payload["processing_metadata"]["aligned_artifact"]
+    assert len(payload["detections"]) > 0
+
+    processing_metadata = payload["processing_metadata"]
+    aligned_artifact = processing_metadata["aligned_artifact"]
     assert aligned_artifact["path"] == payload["aligned_image"]
     assert aligned_artifact["height"] > 0
     assert aligned_artifact["width"] > 0
     assert aligned_artifact["channels"] in {1, 3}
-    assert payload["processing_metadata"]["executed_stages"] == list(
-        STAGE_SEQUENCE
-    )
+    assert processing_metadata["executed_stages"] == list(STAGE_SEQUENCE)
+
+    timings = processing_metadata["timings"]
+    assert timings["total_ms"] >= 0.0
+    for stage_name in STAGE_SEQUENCE:
+        assert stage_name in timings["stage_ms"]
+
+    diagnostics = processing_metadata["diagnostics"]
+    assert isinstance(diagnostics, list)
 
 
 def test_process_document_processing_metadata_contains_trace_context(
@@ -615,6 +624,33 @@ def test_process_document_partial_extraction_returns_null_fields(
 
     assert response.status_code == 200
     payload = response.json()
+    expected_keys = {
+        "request_id",
+        "document_type_detected",
+        "aligned_image",
+        "detections",
+        "fields",
+        "field_confidence",
+        "validation_flags",
+        "processing_metadata",
+    }
+
+    assert expected_keys.issubset(payload.keys())
+    assert payload["aligned_image"] == (
+        f"artifacts/{payload['request_id']}/aligned-image.png"
+    )
+    assert payload["detections"] == []
+    assert payload["field_confidence"] == {"cardholder_name": 0.92}
+    assert payload["validation_flags"] == []
+
+    processing_metadata = payload["processing_metadata"]
+    assert processing_metadata["partial_extraction"] is True
+    assert processing_metadata["timings"] == {
+        "total_ms": 0.0,
+        "stage_ms": {},
+    }
+    assert processing_metadata["diagnostics"] == []
+
     field_payload = payload["fields"]
 
     assert set(field_payload.keys()) == set(ExtractedFields.model_fields.keys())

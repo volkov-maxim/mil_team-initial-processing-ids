@@ -358,7 +358,7 @@ isolated, verifiable tasks.
 
 ## Phase 8 — Delivery Hardening & Acceptance
 
-- [ ] **T055** Finalize API response composition with required artifacts.
+- [x] **T055** Finalize API response composition with required artifacts.
   - Depends on: T050, T052, T043
   - Implement: Ensure response returns aligned artifact reference, detections,
     fields, confidence, flags, and processing metadata.
