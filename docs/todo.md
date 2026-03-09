@@ -375,7 +375,7 @@ isolated, verifiable tasks.
   - Implement: Expand unit tests for core deterministic logic.
   - Verify: Unit test suite passes with required coverage targets.
 
-- [ ] **T058** Add E2E matrix by document type and quality condition.
+- [x] **T058** Add E2E matrix by document type and quality condition.
   - Depends on: T055
   - Implement: Add E2E cases for clean/rotated/perspective/low-quality
     documents for bank card, ID card, and driver license.
