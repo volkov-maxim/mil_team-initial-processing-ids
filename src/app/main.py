@@ -5,6 +5,7 @@ from typing import TypeAlias
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.routes import router as api_router
@@ -62,6 +63,30 @@ async def app_core_error_handler(
     )
     return JSONResponse(
         status_code=exc.status_code,
+        content=payload.model_dump(exclude_none=True),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    """Map FastAPI request validation failures to ``HTTP 400``."""
+    request_id = getattr(request.state, "request_id", "unknown")
+    payload = BadRequestErrorResponse(
+        details={"validation_errors": exc.errors()},
+    )
+
+    logger.warning(
+        "request_validation_error",
+        extra={
+            "request_id": request_id,
+            "error_count": len(exc.errors()),
+        },
+    )
+    return JSONResponse(
+        status_code=400,
         content=payload.model_dump(exclude_none=True),
     )
 

@@ -365,7 +365,7 @@ isolated, verifiable tasks.
   - Verify: Integration test validates full contract for success and partial
     cases.
 
-- [ ] **T056** Add integration tests for multipart parsing and error codes.
+- [x] **T056** Add integration tests for multipart parsing and error codes.
   - Depends on: T015, T055
   - Implement: Add tests for 400/422/500 and valid request paths.
   - Verify: Integration test suite passes.

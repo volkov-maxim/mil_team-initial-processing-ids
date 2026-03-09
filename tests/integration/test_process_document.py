@@ -13,6 +13,8 @@ from app.api.schemas import DocumentTypeDetected
 from app.api.schemas import DocumentTypeHint
 from app.api.schemas import ExtractedFields
 from app.core.exceptions import InputValidationError
+from app.core.exceptions import InternalProcessingError
+from app.core.exceptions import UnprocessableDocumentError
 from app.main import app
 from app.ocr.detector import DetectionResult
 from app.ocr.detector import TextRegion
@@ -210,6 +212,20 @@ def _build_multipart_payload() -> tuple[dict[str, tuple], dict[str, str]]:
         "use_external_fallback": "false",
     }
     return files, data
+
+
+def _build_minimal_pipeline_result(request_id: str) -> PipelineResult:
+    """Build a minimal successful pipeline result for route parsing tests."""
+    return PipelineResult(
+        request_id=request_id,
+        document_type_detected=DocumentTypeDetected.UNKNOWN,
+        aligned_image=f"artifacts/{request_id}/aligned-image.png",
+        detections=[],
+        fields=ExtractedFields(),
+        field_confidence={},
+        validation_flags=[],
+        processing_metadata={},
+    )
 
 
 def test_process_document_returns_contract_valid_success_payload(
@@ -686,3 +702,186 @@ def test_process_document_maps_pipeline_errors_to_typed_envelope(
     payload = response.json()
     assert payload["error_code"] == "invalid_input"
     assert payload["message"] == "Unsupported media type."
+
+
+def test_process_document_maps_unprocessable_error_to_typed_envelope(
+    monkeypatch,
+) -> None:
+    """Map unprocessable pipeline exceptions to the 422 error envelope."""
+
+    def _raise_unprocessable_document_error(_context) -> None:
+        raise UnprocessableDocumentError(message="Document is unreadable.")
+
+    monkeypatch.setattr(
+        api_routes,
+        "process_document_pipeline",
+        _raise_unprocessable_document_error,
+    )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    files, data = _build_multipart_payload()
+
+    response = client.post(
+        "/v1/process-document",
+        files=files,
+        data=data,
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["error_code"] == "unprocessable_document"
+    assert payload["message"] == "Document is unreadable."
+
+
+def test_process_document_maps_internal_error_to_typed_envelope(
+    monkeypatch,
+) -> None:
+    """Map internal pipeline exceptions to the 500 error envelope."""
+
+    def _raise_internal_processing_error(_context) -> None:
+        raise InternalProcessingError(
+            message="OCR runtime failed.",
+            error_code="ocr_runtime_failure",
+        )
+
+    monkeypatch.setattr(
+        api_routes,
+        "process_document_pipeline",
+        _raise_internal_processing_error,
+    )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    files, data = _build_multipart_payload()
+
+    response = client.post(
+        "/v1/process-document",
+        files=files,
+        data=data,
+    )
+
+    assert response.status_code == 500
+    payload = response.json()
+    assert payload["error_code"] == "ocr_runtime_failure"
+    assert payload["message"] == "OCR runtime failed."
+
+
+def test_process_document_parses_multipart_defaults(
+    monkeypatch,
+) -> None:
+    """Use default multipart form values when optional parts are omitted."""
+    captured: dict[str, object] = {}
+
+    def _capture_context_and_return(_context: PipelineContext) -> PipelineResult:
+        captured["document_type_hint"] = _context.document_type_hint
+        captured["use_external_fallback"] = _context.use_external_fallback
+        return _build_minimal_pipeline_result(_context.request_id)
+
+    monkeypatch.setattr(
+        api_routes,
+        "process_document_pipeline",
+        _capture_context_and_return,
+    )
+
+    files, _ = _build_multipart_payload()
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/process-document",
+        files=files,
+    )
+
+    assert response.status_code == 200
+    assert captured["document_type_hint"] is DocumentTypeHint.AUTO
+    assert captured["use_external_fallback"] is False
+
+
+def test_process_document_parses_multipart_explicit_form_values(
+    monkeypatch,
+) -> None:
+    """Parse explicit multipart form values into typed request fields."""
+    captured: dict[str, object] = {}
+
+    def _capture_context_and_return(_context: PipelineContext) -> PipelineResult:
+        captured["document_type_hint"] = _context.document_type_hint
+        captured["use_external_fallback"] = _context.use_external_fallback
+        return _build_minimal_pipeline_result(_context.request_id)
+
+    monkeypatch.setattr(
+        api_routes,
+        "process_document_pipeline",
+        _capture_context_and_return,
+    )
+
+    files, _ = _build_multipart_payload()
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/process-document",
+        files=files,
+        data={
+            "document_type_hint": "drivers_license",
+            "use_external_fallback": "true",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["document_type_hint"] is DocumentTypeHint.DRIVERS_LICENSE
+    assert captured["use_external_fallback"] is True
+
+
+def test_process_document_returns_400_for_missing_image_part() -> None:
+    """Reject multipart requests that omit the required image upload part."""
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.post(
+        "/v1/process-document",
+        data={
+            "document_type_hint": "auto",
+            "use_external_fallback": "false",
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error_code"] == "invalid_input"
+    assert payload["message"] == "Request input is invalid."
+
+
+def test_process_document_returns_400_for_invalid_document_type_hint() -> None:
+    """Reject unsupported multipart enum values with a typed 400 envelope."""
+    client = TestClient(app, raise_server_exceptions=False)
+    files, _ = _build_multipart_payload()
+
+    response = client.post(
+        "/v1/process-document",
+        files=files,
+        data={
+            "document_type_hint": "passport",
+            "use_external_fallback": "false",
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error_code"] == "invalid_input"
+    assert payload["message"] == "Request input is invalid."
+
+
+def test_process_document_returns_400_for_invalid_fallback_value() -> None:
+    """Reject invalid multipart boolean values with a typed 400 envelope."""
+    client = TestClient(app, raise_server_exceptions=False)
+    files, _ = _build_multipart_payload()
+
+    response = client.post(
+        "/v1/process-document",
+        files=files,
+        data={
+            "document_type_hint": "auto",
+            "use_external_fallback": "sometimes",
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error_code"] == "invalid_input"
+    assert payload["message"] == "Request input is invalid."
