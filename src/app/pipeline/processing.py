@@ -8,10 +8,12 @@ from typing import Any
 
 import numpy as np
 from app.api.schemas import DocumentTypeDetected
+from app.api.schemas import DocumentTypeHint
 from app.api.schemas import ExtractedFields
 from app.core.exceptions import InputValidationError
 from app.core.exceptions import InternalProcessingError
 from app.core.exceptions import UnprocessableDocumentError
+from app.extraction.dispatcher import DocumentTypeDispatcher
 from app.ocr.detector import EasyOCRTextDetector
 from app.ocr.detector import TextDetector
 from app.ocr.recognizer import EasyOCRTextRecognizer
@@ -42,6 +44,12 @@ STAGE_SEQUENCE: tuple[str, ...] = (
     "optional_fallback",
     "compose_response",
 )
+
+_DETECTED_TYPE_BY_HINT: dict[DocumentTypeHint, DocumentTypeDetected] = {
+    DocumentTypeHint.BANK_CARD: DocumentTypeDetected.BANK_CARD,
+    DocumentTypeHint.ID_CARD: DocumentTypeDetected.ID_CARD,
+    DocumentTypeHint.DRIVERS_LICENSE: DocumentTypeDetected.DRIVERS_LICENSE,
+}
 
 
 def _validate_input(context: PipelineContext) -> bool:
@@ -137,6 +145,34 @@ def _run_ocr(context: PipelineContext) -> bool:
 
 def _extract_fields(context: PipelineContext) -> bool:
     """Extract schema-aligned fields from OCR outputs."""
+    raw_ocr_lines = context.stage_outputs.get("ocr_lines")
+    if not isinstance(raw_ocr_lines, list):
+        raise InternalProcessingError(
+            message="OCR lines are unavailable for extraction stage.",
+            error_code="extraction_ocr_lines_missing",
+            details={"stage": "extract_fields"},
+        )
+
+    ocr_lines: LineRecognitionResult = raw_ocr_lines
+    dispatcher = _resolve_document_dispatcher(context)
+    resolved_document_type = dispatcher.resolve_document_type(
+        document_type_hint=context.document_type_hint,
+        ocr_lines=ocr_lines,
+    )
+    extractor = dispatcher.resolve_extractor(
+        document_type_hint=context.document_type_hint,
+        ocr_lines=ocr_lines,
+    )
+    extracted_fields = extractor.extract(ocr_lines)
+
+    context.stage_outputs["document_type_detected"] = resolved_document_type
+    context.stage_outputs["extracted_fields"] = extracted_fields
+    context.metadata["extraction"] = {
+        "document_type_detected": resolved_document_type.value,
+        "extractor": extractor.__class__.__name__,
+        "non_null_field_count": _count_non_null_fields(extracted_fields),
+    }
+
     return True
 
 
@@ -209,6 +245,19 @@ def _resolve_text_recognizer(context: PipelineContext) -> TextRecognizer:
     return recognizer
 
 
+def _resolve_document_dispatcher(
+    context: PipelineContext,
+) -> DocumentTypeDispatcher:
+    """Resolve a request-scoped document-type dispatcher instance."""
+    cached = context.stage_outputs.get("document_dispatcher")
+    if isinstance(cached, DocumentTypeDispatcher):
+        return cached
+
+    dispatcher = DocumentTypeDispatcher()
+    context.stage_outputs["document_dispatcher"] = dispatcher
+    return dispatcher
+
+
 def _serialize_token_detections(
     tokens: TokenRecognitionResult,
 ) -> list[dict[str, Any]]:
@@ -239,6 +288,13 @@ def _build_result(
             if isinstance(item, dict)
         ]
 
+    detected_type = _resolve_detected_document_type(context)
+
+    fields = ExtractedFields()
+    raw_fields = context.stage_outputs.get("extracted_fields")
+    if isinstance(raw_fields, ExtractedFields):
+        fields = raw_fields
+
     context.metadata["executed_stages"] = executed_stages
     context.metadata["short_circuited"] = short_circuit_stage is not None
     context.metadata["short_circuit_stage"] = short_circuit_stage
@@ -246,14 +302,37 @@ def _build_result(
 
     return PipelineResult(
         request_id=context.request_id,
-        document_type_detected=DocumentTypeDetected.UNKNOWN,
+        document_type_detected=detected_type,
         aligned_image=context.artifacts.get("aligned_image"),
         detections=detections,
-        fields=ExtractedFields(),
+        fields=fields,
         processing_metadata=processing_metadata,
         diagnostics=context.diagnostics,
         timings=context.timings,
     )
+
+
+def _resolve_detected_document_type(
+    context: PipelineContext,
+) -> DocumentTypeDetected:
+    """Resolve detected document type from stage outputs with fallback."""
+    raw_detected_type = context.stage_outputs.get("document_type_detected")
+    if isinstance(raw_detected_type, DocumentTypeDetected):
+        return raw_detected_type
+
+    if isinstance(raw_detected_type, DocumentTypeHint):
+        return _DETECTED_TYPE_BY_HINT.get(
+            raw_detected_type,
+            DocumentTypeDetected.UNKNOWN,
+        )
+
+    return DocumentTypeDetected.UNKNOWN
+
+
+def _count_non_null_fields(extracted_fields: ExtractedFields) -> int:
+    """Count extracted fields that have non-null values."""
+    payload = extracted_fields.model_dump()
+    return sum(value is not None for value in payload.values())
 
 
 def process_document_pipeline(

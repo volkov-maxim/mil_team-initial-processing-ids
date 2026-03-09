@@ -6,7 +6,9 @@ import app.api.routes as api_routes
 import app.pipeline.processing as pipeline_processing
 import numpy as np
 from fastapi.testclient import TestClient
+import pytest
 
+from app.api.schemas import DocumentTypeHint
 from app.core.exceptions import InputValidationError
 from app.main import app
 from app.ocr.detector import DetectionResult
@@ -103,6 +105,66 @@ def _build_stub_ocr_stage_outputs() -> dict[str, object]:
     }
 
 
+def _build_line(
+    *,
+    text: str,
+    y: float,
+    confidence: float = 0.9,
+) -> RecognizedLine:
+    """Build one OCR line fixture with deterministic geometry."""
+    token = RecognizedToken(
+        text=text,
+        polygon=[
+            (10.0, y),
+            (330.0, y),
+            (330.0, y + 22.0),
+            (10.0, y + 22.0),
+        ],
+        bounding_box=(10.0, y, 320.0, 22.0),
+        confidence=confidence,
+    )
+
+    return RecognizedLine(
+        text=text,
+        tokens=[token],
+        bounding_box=(10.0, y, 320.0, 22.0),
+        confidence=confidence,
+    )
+
+
+def _build_run_ocr_stage_override(
+    ocr_texts: list[str],
+):
+    """Build one stage override that injects deterministic OCR outputs."""
+    lines = [
+        _build_line(text=text, y=10.0 + (index * 26.0))
+        for index, text in enumerate(ocr_texts)
+    ]
+
+    detections = [
+        {
+            "text": line.text,
+            "bounding_box": list(line.bounding_box),
+            "confidence": line.confidence,
+        }
+        for line in lines
+    ]
+    ocr_line_payloads = [line.model_dump(mode="json") for line in lines]
+
+    def _run_ocr_override(context: PipelineContext) -> bool:
+        context.stage_outputs["ocr_lines"] = lines
+        context.stage_outputs["detections"] = detections
+        context.metadata["ocr"] = {
+            "regions_count": len(lines),
+            "tokens_count": len(lines),
+            "lines_count": len(lines),
+        }
+        context.metadata["ocr_lines"] = ocr_line_payloads
+        return True
+
+    return _run_ocr_override
+
+
 def _patch_stub_ocr_resolvers(monkeypatch) -> None:
     """Patch OCR resolver helpers to avoid optional easyocr dependency."""
 
@@ -171,7 +233,7 @@ def test_process_document_returns_contract_valid_success_payload(
     }
 
     assert expected_keys.issubset(payload.keys())
-    assert payload["document_type_detected"] == "unknown"
+    assert payload["document_type_detected"] == "id_card"
     assert payload["aligned_image"] == (
         f"artifacts/{payload['request_id']}/aligned-image.png"
     )
@@ -228,6 +290,99 @@ def test_pipeline_result_includes_detections_and_ocr_lines() -> None:
     assert len(ocr_lines) == 1
     assert ocr_lines[0]["text"] == "JOHN DOE"
     assert ocr_lines[0]["bounding_box"] == [10.0, 8.0, 80.0, 20.0]
+
+
+@pytest.mark.parametrize(
+    (
+        "ocr_texts",
+        "expected_detected",
+        "expected_fields",
+    ),
+    [
+        (
+            [
+                "МИР",
+                "2200 0312 3456 7890",
+                "IVAN IVANOV",
+                "VALID THRU 01/27",
+            ],
+            "bank_card",
+            {
+                "card_number": "2200 0312 3456 7890",
+                "cardholder_name": "Ivan Ivanov",
+                "expiry_date": "2027-01-01",
+            },
+        ),
+        (
+            [
+                "45 77 695122",
+                "ФАМИЛИЯ",
+                "КОРОКОВ",
+                "ИМЯ",
+                "ЛЕОНИД",
+                "ОТЧЕСТВО",
+                "БОРИСОВИЧ",
+                "ПОЛ МУЖ.",
+                "ДАТА РОЖДЕНИЯ 19.10.1969",
+                "МЕСТО РОЖДЕНИЯ ГОР. МОСКВА",
+            ],
+            "id_card",
+            {
+                "full_name": "Короков Леонид Борисович",
+                "date_of_birth": "1969-10-19",
+                "document_number": "45 77 695122",
+            },
+        ),
+        (
+            [
+                "1. МИТИН",
+                "2. АНДРЕЙ ВЛАДИМИРОВИЧ",
+                "3. 04.09.1984",
+                "МОСКВА",
+                "4a) 21.07.2016    4b) 21.07.2026",
+                "4c) ГИБДД 7723",
+                "5. 77 28 089628",
+                "8. МОСКВА",
+                "9. B",
+            ],
+            "drivers_license",
+            {
+                "full_name": "Митин Андрей Владимирович",
+                "issue_date": "2016-07-21",
+                "license_number": "77 28 089628",
+            },
+        ),
+    ],
+)
+def test_pipeline_extraction_stage_maps_all_document_types(
+    ocr_texts: list[str],
+    expected_detected: str,
+    expected_fields: dict[str, str],
+) -> None:
+    """Map OCR lines into structured fields for all supported types."""
+    image_bytes = SAMPLE_DOCUMENT_PATH.read_bytes()
+    context = PipelineContext(
+        request_id=f"req-extraction-{expected_detected}",
+        image_bytes=image_bytes,
+        document_type_hint=DocumentTypeHint.AUTO,
+        metadata={"content_type": "image/jpeg"},
+    )
+
+    result = process_document_pipeline(
+        context,
+        stage_overrides={
+            "run_ocr": _build_run_ocr_stage_override(ocr_texts),
+        },
+    )
+
+    assert result.document_type_detected.value == expected_detected
+    extraction_metadata = result.processing_metadata["extraction"]
+    assert extraction_metadata["document_type_detected"] == expected_detected
+    assert extraction_metadata["non_null_field_count"] >= len(expected_fields)
+
+    fields = result.fields.model_dump()
+    for field_name, expected_value in expected_fields.items():
+        assert fields[field_name] == expected_value
 
 
 def test_process_document_maps_pipeline_errors_to_typed_envelope(

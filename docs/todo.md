@@ -243,7 +243,7 @@ isolated, verifiable tasks.
     `src/app/extraction/dispatcher.py`.
   - Verify: Unit tests for all hint and auto-detection branches.
 
-- [ ] **T038** Wire extraction stage into pipeline.
+- [x] **T038** Wire extraction stage into pipeline.
   - Depends on: T037
   - Implement: Replace extraction stub with dispatcher+extractor invocation.
   - Verify: Integration tests for all 3 document types produce structured
