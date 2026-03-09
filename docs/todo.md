@@ -259,9 +259,9 @@ isolated, verifiable tasks.
     `src/app/validation/field_validators.py`.
   - Verify: Unit tests for valid/invalid date and number patterns.
 
-- [ ] **T040** Implement cross-field consistency checks.
+- [x] **T040** Implement cross-field consistency checks.
   - Depends on: T039
-  - Implement: Add `ConsistencyChecks` for conflicting/mismatched fields.
+  - Implement: Add `ConsistencyChecks` for conflicting/mismatched fields. This relates to date-chronology consistency only.
   - Verify: Unit tests for consistency flag generation.
 
 - [ ] **T041** Implement confidence aggregation.
