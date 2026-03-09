@@ -227,7 +227,7 @@ isolated, verifiable tasks.
   - Implement: Add `BankCardExtractor` required/optional mapping logic. Use `Bank Card Schema` from `docs\high-level-spec.md` file.
   - Verify: Unit tests with bank card OCR fixtures from `images` folder.
 
-- [ ] **T035** Implement ID card extractor.
+- [x] **T035** Implement ID card extractor.
   - Depends on: T033
   - Implement: Add `IdCardExtractor` required/optional mapping logic for Russian passport. Use `ID Card Schema` from `docs\high-level-spec.md` file.
   - Verify: Unit tests with ID card OCR fixtures from `images` folder.
