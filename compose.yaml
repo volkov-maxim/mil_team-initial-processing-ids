@@ -5,10 +5,14 @@ services:
       dockerfile: Dockerfile
     image: mil-team-initial-processing-ids:local
     container_name: mil-team-initial-processing-ids-api
+    init: true
     ports:
       - "${APP_PORT:-8000}:8000"
+    env_file:
+      - .env
     environment:
       APP_DEVICE_MODE: ${APP_DEVICE_MODE:-auto}
+      APP_GPU_MEMORY_BUDGET_GB: ${APP_GPU_MEMORY_BUDGET_GB:-10.0}
       APP_USE_EXTERNAL_FALLBACK_DEFAULT: ${APP_USE_EXTERNAL_FALLBACK_DEFAULT:-false}
       APP_FALLBACK_BASE_URL: ${APP_FALLBACK_BASE_URL:-}
       APP_FALLBACK_PROXY_URL: ${APP_FALLBACK_PROXY_URL:-}
@@ -17,13 +21,44 @@ services:
       APP_OVERLAY_SUBDIR: ${APP_OVERLAY_SUBDIR:-overlays}
       APP_FALLBACK_CONFIDENCE_THRESHOLD: ${APP_FALLBACK_CONFIDENCE_THRESHOLD:-0.70}
       APP_REQUIRED_FIELD_CONFIDENCE_THRESHOLD: ${APP_REQUIRED_FIELD_CONFIDENCE_THRESHOLD:-0.80}
+    command:
+      - python3.12
+      - -m
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python3.12
+        - -c
+        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).getcode() == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
     volumes:
       - ./artifacts:/app/artifacts
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: unless-stopped
+
+  api-gpu:
+    extends:
+      service: api
+    container_name: mil-team-initial-processing-ids-api-gpu
+    profiles:
+      - gpu
+    environment:
+      APP_DEVICE_MODE: ${APP_DEVICE_MODE:-cuda}
+      APP_GPU_MEMORY_BUDGET_GB: ${APP_GPU_MEMORY_BUDGET_GB:-10.0}
+      APP_USE_EXTERNAL_FALLBACK_DEFAULT: ${APP_USE_EXTERNAL_FALLBACK_DEFAULT:-false}
+      APP_FALLBACK_BASE_URL: ${APP_FALLBACK_BASE_URL:-}
+      APP_FALLBACK_PROXY_URL: ${APP_FALLBACK_PROXY_URL:-}
+      APP_ARTIFACTS_ROOT: ${APP_ARTIFACTS_ROOT:-artifacts}
+      APP_ALIGNED_SUBDIR: ${APP_ALIGNED_SUBDIR:-aligned}
+      APP_OVERLAY_SUBDIR: ${APP_OVERLAY_SUBDIR:-overlays}
+      APP_FALLBACK_CONFIDENCE_THRESHOLD: ${APP_FALLBACK_CONFIDENCE_THRESHOLD:-0.70}
+      APP_REQUIRED_FIELD_CONFIDENCE_THRESHOLD: ${APP_REQUIRED_FIELD_CONFIDENCE_THRESHOLD:-0.80}
+    gpus: all

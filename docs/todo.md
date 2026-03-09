@@ -381,7 +381,7 @@ isolated, verifiable tasks.
     documents for bank card, ID card, and driver license.
   - Verify: E2E suite passes and asserts both mandatory artifacts.
 
-- [ ] **T059** Finalize Docker Compose workflow for local run.
+- [x] **T059** Finalize Docker Compose workflow for local run.
   - Depends on: T055, T058
   - Implement: Harden compose service definitions, volumes, env wiring, and
     startup checks.
