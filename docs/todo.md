@@ -253,7 +253,7 @@ isolated, verifiable tasks.
 
 ## Phase 5 — Validation & Confidence
 
-- [ ] **T039** Implement field-level validators.
+- [x] **T039** Implement field-level validators.
   - Depends on: T038
   - Implement: Add date plausibility and pattern checks in
     `src/app/validation/field_validators.py`.
