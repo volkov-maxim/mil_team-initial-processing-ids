@@ -341,7 +341,7 @@ isolated, verifiable tasks.
     model versions, fallback usage.
   - Verify: Integration test confirms processing metadata fields are present.
 
-- [ ] **T053** Add device selector (`cpu`, `cuda`, `auto`) and safe CPU
+- [x] **T053** Add device selector (`cpu`, `cuda`, `auto`) and safe CPU
   fallback.
   - Depends on: T026, T028, T003
   - Implement: Add runtime device routing in config/model-loading paths.

@@ -13,6 +13,8 @@ from pydantic import Field
 
 from app.core.config import load_settings
 
+_RUNTIME_DEVICE_VALUES = frozenset({"cpu", "cuda"})
+
 
 class FallbackTraceStub(BaseModel):
     """Stub fallback trace payload until fallback telemetry is implemented."""
@@ -43,10 +45,29 @@ class TraceContext(BaseModel):
         """Build trace metadata from request-scoped pipeline context."""
         settings = load_settings()
         return cls(
-            device=settings.device_mode,
+            device=_resolve_trace_device(
+                requested_device=settings.device_mode,
+                stage_outputs=stage_outputs,
+            ),
             model_versions=_resolve_model_versions(stage_outputs),
             fallback=FallbackTraceStub(requested=use_external_fallback),
         )
+
+
+def _resolve_trace_device(
+    *,
+    requested_device: str,
+    stage_outputs: Mapping[str, Any],
+) -> str:
+    """Resolve trace device using runtime OCR device when available."""
+    runtime_device = stage_outputs.get("ocr_device")
+    if (
+        isinstance(runtime_device, str)
+        and runtime_device in _RUNTIME_DEVICE_VALUES
+    ):
+        return runtime_device
+
+    return requested_device
 
 
 def _resolve_model_versions(

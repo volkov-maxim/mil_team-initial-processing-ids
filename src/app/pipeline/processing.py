@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from typing import Any
+import importlib
 
 import numpy as np
 from app.api.schemas import DocumentTypeDetected
 from app.api.schemas import DocumentTypeHint
 from app.api.schemas import ExtractedFields
+from app.core.config import load_settings
 from app.core.exceptions import InputValidationError
 from app.core.exceptions import InternalProcessingError
 from app.core.exceptions import UnprocessableDocumentError
@@ -69,6 +71,8 @@ _NUMBER_VALIDATION_FIELDS: tuple[str, ...] = (
     "document_number",
     "license_number",
 )
+
+_RUNTIME_DEVICE_VALUES = frozenset({"cpu", "cuda"})
 
 
 def _validate_input(context: PipelineContext) -> bool:
@@ -301,7 +305,8 @@ def _resolve_text_detector(context: PipelineContext) -> TextDetector:
     if isinstance(cached, TextDetector):
         return cached
 
-    detector = EasyOCRTextDetector()
+    runtime_device = _resolve_ocr_runtime_device(context)
+    detector = EasyOCRTextDetector(gpu=runtime_device == "cuda")
     context.stage_outputs["text_detector"] = detector
     return detector
 
@@ -312,9 +317,71 @@ def _resolve_text_recognizer(context: PipelineContext) -> TextRecognizer:
     if isinstance(cached, TextRecognizer):
         return cached
 
-    recognizer = EasyOCRTextRecognizer()
+    runtime_device = _resolve_ocr_runtime_device(context)
+    recognizer = EasyOCRTextRecognizer(gpu=runtime_device == "cuda")
     context.stage_outputs["text_recognizer"] = recognizer
     return recognizer
+
+
+def _resolve_ocr_runtime_device(context: PipelineContext) -> str:
+    """Resolve one request-scoped OCR runtime device and cache it."""
+    cached_device = context.stage_outputs.get("ocr_device")
+    if (
+        isinstance(cached_device, str)
+        and cached_device in _RUNTIME_DEVICE_VALUES
+    ):
+        return cached_device
+
+    settings = load_settings()
+    cuda_available = _is_cuda_available()
+    runtime_device = _select_runtime_device(
+        device_mode=settings.device_mode,
+        cuda_available=cuda_available,
+    )
+
+    context.stage_outputs["ocr_device"] = runtime_device
+    context.metadata["ocr_device"] = {
+        "requested": settings.device_mode,
+        "resolved": runtime_device,
+        "cuda_available": cuda_available,
+    }
+
+    return runtime_device
+
+
+def _select_runtime_device(*, device_mode: str, cuda_available: bool) -> str:
+    """Resolve effective OCR runtime device from mode and availability."""
+    if device_mode == "cpu":
+        return "cpu"
+
+    if device_mode == "cuda":
+        return "cuda" if cuda_available else "cpu"
+
+    if device_mode == "auto":
+        return "cuda" if cuda_available else "cpu"
+
+    return "cpu"
+
+
+def _is_cuda_available() -> bool:
+    """Return whether CUDA is available in the optional torch runtime."""
+    try:
+        torch_module = importlib.import_module("torch")
+    except ModuleNotFoundError:
+        return False
+
+    cuda_module = getattr(torch_module, "cuda", None)
+    if cuda_module is None:
+        return False
+
+    is_available = getattr(cuda_module, "is_available", None)
+    if not callable(is_available):
+        return False
+
+    try:
+        return bool(is_available())
+    except Exception:
+        return False
 
 
 def _resolve_document_dispatcher(
