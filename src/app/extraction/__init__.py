@@ -3,7 +3,9 @@
 from app.extraction.base_extractor import BaseExtractor
 from app.extraction.base_extractor import ExtractedFieldsModel
 from app.extraction.bank_card_extractor import BankCardExtractor
+from app.extraction.dispatcher import DocumentTypeDispatcher
 from app.extraction.drivers_license_extractor import DriversLicenseExtractor
+from app.extraction.id_card_extractor import IdCardExtractor
 from app.extraction.rules_common import build_synonym_pattern
 from app.extraction.rules_common import clamp_confidence
 from app.extraction.rules_common import cleanup_text
@@ -17,8 +19,10 @@ from app.extraction.rules_common import tokenize_text
 __all__ = [
 	"BaseExtractor",
 	"BankCardExtractor",
+	"DocumentTypeDispatcher",
 	"DriversLicenseExtractor",
 	"ExtractedFieldsModel",
+	"IdCardExtractor",
 	"build_synonym_pattern",
 	"clamp_confidence",
 	"cleanup_text",

@@ -237,7 +237,7 @@ isolated, verifiable tasks.
   - Implement: Add `DriversLicenseExtractor` required/optional mapping logic for Russian driver's license. Use `Driver’s License Schema` from `docs\high-level-spec.md` file.
   - Verify: Unit tests with driver's license OCR fixtures from `images` folder.
 
-- [ ] **T037** Implement document type dispatcher.
+- [x] **T037** Implement document type dispatcher.
   - Depends on: T034, T035, T036
   - Implement: Add hint/auto extractor routing in
     `src/app/extraction/dispatcher.py`.
