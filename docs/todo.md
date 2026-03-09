@@ -232,7 +232,7 @@ isolated, verifiable tasks.
   - Implement: Add `IdCardExtractor` required/optional mapping logic for Russian passport. Use `ID Card Schema` from `docs\high-level-spec.md` file.
   - Verify: Unit tests with ID card OCR fixtures from `images` folder.
 
-- [ ] **T036** Implement driver's license extractor.
+- [x] **T036** Implement driver's license extractor.
   - Depends on: T033
   - Implement: Add `DriversLicenseExtractor` required/optional mapping logic for Russian driver's license. Use `Driver’s License Schema` from `docs\high-level-spec.md` file.
   - Verify: Unit tests with driver's license OCR fixtures from `images` folder.
