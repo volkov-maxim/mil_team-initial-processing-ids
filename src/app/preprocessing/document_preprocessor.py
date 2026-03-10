@@ -28,10 +28,10 @@ DEFAULT_MIN_DOCUMENT_DIMENSION_PX = 96
 DEFAULT_MIN_CONTRAST_STDDEV = 12.0
 DEFAULT_MIN_EDGE_DENSITY = 0.01
 DEFAULT_MIN_LAPLACIAN_VARIANCE = 20.0
-DEFAULT_BOUNDARY_MIN_AREA_RATIO = 0.05
-DEFAULT_BOUNDARY_APPROXIMATION_RATIO = 0.02
-DEFAULT_BOUNDARY_CANNY_THRESHOLD_LOW = 60
-DEFAULT_BOUNDARY_CANNY_THRESHOLD_HIGH = 180
+DEFAULT_BOUNDARY_MIN_AREA_RATIO = 0.25
+DEFAULT_BOUNDARY_APPROXIMATION_RATIO = 0.04
+DEFAULT_BOUNDARY_CANNY_THRESHOLD_LOW = 20
+DEFAULT_BOUNDARY_CANNY_THRESHOLD_HIGH = 100
 DEFAULT_PERSPECTIVE_INTERPOLATION = cv2.INTER_LINEAR
 DEFAULT_ROTATION_TOP_BAND_FRACTION = 0.30
 DEFAULT_ROTATION_LANDSCAPE_BONUS = 0.25
@@ -355,16 +355,16 @@ class DocumentPreprocessor:
                 error=error,
             ) from error
 
-        try:
-            rotation_normalized = self.normalize_rotation(
-                perspective_corrected
-            )
-        except UnprocessableDocumentError as error:
-            raise self._build_alignment_failure_error(
-                stage="rotation_normalization",
-                error=error,
-            ) from error
-
+        # try:
+        #     rotation_normalized = self.normalize_rotation(
+        #         perspective_corrected
+        #     )
+        # except UnprocessableDocumentError as error:
+        #     raise self._build_alignment_failure_error(
+        #         stage="rotation_normalization",
+        #         error=error,
+        #     ) from error
+        rotation_normalized = perspective_corrected
         try:
             return self.denoise_contrast(
                 rotation_normalized,
@@ -400,13 +400,13 @@ class DocumentPreprocessor:
                 details={"reason": "invalid_image_shape"},
             )
 
-        blurred = cv2.GaussianBlur(grayscale, (5, 5), 0)
+        blurred = cv2.GaussianBlur(grayscale, (3, 3), 0)
         edges = cv2.Canny(
             blurred,
             self.boundary_canny_threshold_low,
             self.boundary_canny_threshold_high,
         )
-        dilation_kernel = np.ones((3, 3), dtype=np.uint8)
+        dilation_kernel = np.ones((5, 5), dtype=np.uint8)
         edges = cv2.dilate(edges, dilation_kernel, iterations=1)
 
         contours, _ = cv2.findContours(
